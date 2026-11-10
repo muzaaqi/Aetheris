@@ -17,7 +17,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 # Hyprland IPC socket integration
-hyprland = "0.4"
+hyprland = "0.4.0-beta.3"
 
 # In-kernel filesystem monitoring (Antigravity transcripts)
 notify = "7.0"
@@ -26,6 +26,16 @@ notify = "7.0"
 ignore = "0.4"
 walkdir = "2.5"
 
+# Error handling
+thiserror = "2.0"
+
+# Graceful shutdown
+tokio-util = { version = "0.7", features = ["rt"] }
+
 # Logging & Observability
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+# WebSocket client for integration tests
+tokio-tungstenite = "0.26"
