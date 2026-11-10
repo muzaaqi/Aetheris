@@ -1,6 +1,56 @@
 use aetheris_daemon::protocol::{
-    ClientMessage, ServerMessage, TokenStreamPayload, ToolApprovalPayload, WorkspaceSyncPayload,
+    ClientMessage, FileMatch, ServerMessage, SkillInfo, SkillScope, TokenStreamPayload,
+    ToolApprovalPayload, WorkspaceSyncPayload,
 };
+
+#[test]
+fn search_files_deserializes_and_roundtrips() {
+    let json = r#"{"type":"search_files","payload":{"query":"main.rs","limit":10}}"#;
+    let msg: ClientMessage = serde_json::from_str(json).expect("deserialize failed");
+    match msg {
+        ClientMessage::SearchFiles(p) => {
+            assert_eq!(p.query, "main.rs");
+            assert_eq!(p.limit, Some(10));
+        }
+        _ => panic!("wrong variant"),
+    }
+}
+
+#[test]
+fn list_skills_deserializes() {
+    let json = r#"{"type":"list_skills"}"#;
+    let msg: ClientMessage = serde_json::from_str(json).expect("deserialize failed");
+    assert!(matches!(msg, ClientMessage::ListSkills));
+}
+
+#[test]
+fn file_results_serializes_to_spec() {
+    let msg = ServerMessage::FileResults(aetheris_daemon::protocol::FileResultsPayload {
+        query: "main".into(),
+        matches: vec![FileMatch {
+            path: "daemon/src/main.rs".into(),
+            is_dir: false,
+        }],
+    });
+    let json = serde_json::to_string(&msg).expect("serialize failed");
+    assert!(json.contains(r#""type":"file_results""#));
+    assert!(json.contains("daemon/src/main.rs"));
+}
+
+#[test]
+fn skills_list_serializes_with_scope() {
+    let msg = ServerMessage::SkillsList(aetheris_daemon::protocol::SkillsListPayload {
+        skills: vec![SkillInfo {
+            name: "rust-testing".into(),
+            description: "Testing guidelines".into(),
+            scope: SkillScope::Workspace,
+            path: ".agents/skills/rust-testing".into(),
+        }],
+    });
+    let json = serde_json::to_string(&msg).expect("serialize failed");
+    assert!(json.contains(r#""type":"skills_list""#));
+    assert!(json.contains("workspace"));
+}
 
 #[test]
 fn send_message_deserializes_from_spec_json() {

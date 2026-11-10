@@ -140,6 +140,12 @@ async fn handle_client(
                             Ok(ClientMessage::UpdateConfig(payload)) => {
                                 tracing::debug!("Received UpdateConfig from {peer_addr}: platform={}, mode={}, thinking={}", payload.platform, payload.mode, payload.thinking);
                             }
+                            Ok(ClientMessage::SearchFiles(payload)) => {
+                                tracing::debug!("Received SearchFiles from {peer_addr}: query={}", payload.query);
+                            }
+                            Ok(ClientMessage::ListSkills) => {
+                                tracing::debug!("Received ListSkills from {peer_addr}");
+                            }
                             Err(e) => {
                                 tracing::warn!("Received invalid ClientMessage JSON from {peer_addr}: {e}");
                             }
