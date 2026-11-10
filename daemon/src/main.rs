@@ -64,10 +64,22 @@ async fn main() -> Result<()> {
 
     let mut server_err = None;
 
-    // Wait for shutdown signal (Ctrl+C) or server termination
+    #[cfg(unix)]
+    let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+
+    // Wait for shutdown signal (Ctrl+C, SIGTERM) or server termination
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
             tracing::info!("Received Ctrl+C interrupt; initiating graceful shutdown");
+            shutdown.cancel();
+        }
+        _ = async {
+            #[cfg(unix)]
+            { sigterm.recv().await }
+            #[cfg(not(unix))]
+            { std::future::pending::<()>().await }
+        } => {
+            tracing::info!("Received termination signal; initiating graceful shutdown");
             shutdown.cancel();
         }
         res = &mut server_task => {
