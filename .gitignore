@@ -1,0 +1,14 @@
+# target
+/target
+/daemon/target
+
+# Rust artifacts
+**/*.rs.bk
+Cargo.lock
+
+# IDE & OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
