@@ -4,11 +4,12 @@
 //! transitions to the broadcast channel with zero CPU polling.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use hyprland::data::Client;
 use hyprland::event_listener::AsyncEventListener;
 use hyprland::shared::HyprDataActiveOptional;
-use tokio::sync::broadcast;
+use tokio::sync::{RwLock, broadcast};
 use tokio_util::sync::CancellationToken;
 
 use crate::error::Result;
@@ -42,25 +43,47 @@ pub fn detect_git_branch(path: &Path) -> Option<String> {
 /// Runs the Hyprland event listener loop until shutdown is signaled.
 ///
 /// Dispatches `WorkspaceSync` messages over `event_tx` whenever the active
-/// workspace or active window changes in Hyprland.
+/// workspace or active window changes in Hyprland, and synchronizes the active
+/// workspace path with `active_workspace`.
 pub async fn run_hyprland_listener(
     event_tx: broadcast::Sender<ServerMessage>,
     shutdown: CancellationToken,
+    active_workspace: Arc<RwLock<Option<PathBuf>>>,
 ) -> Result<()> {
     let mut listener = AsyncEventListener::new();
 
     let ws_tx = event_tx.clone();
+    let ws_active_ws = active_workspace.clone();
     listener.add_workspace_changed_handler(move |data| {
         let ws_tx = ws_tx.clone();
+        let ws_active_ws = ws_active_ws.clone();
         Box::pin(async move {
             let ws_id = data.id;
-            let ws_name = data.name.to_string();
-            tracing::info!("Hyprland workspace changed: id={ws_id}, name={ws_name}");
+            tracing::info!("Hyprland workspace changed: id={ws_id}");
+
+            // Try to resolve focused client on the new workspace
+            let (path_str, branch) = if let Ok(Some(client)) = Client::get_active_async().await
+                && client.pid > 0
+                && let Some(cwd) = resolve_window_cwd(client.pid as u32)
+            {
+                let path_str = cwd.to_string_lossy().into_owned();
+                let branch = detect_git_branch(&cwd);
+                *ws_active_ws.write().await = Some(cwd);
+                (path_str, branch)
+            } else {
+                let ws_guard = ws_active_ws.read().await;
+                let path_str = ws_guard
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| data.name.to_string());
+                let branch = ws_guard.as_ref().and_then(|p| detect_git_branch(p));
+                (path_str, branch)
+            };
 
             let sync_msg = ServerMessage::WorkspaceSync(WorkspaceSyncPayload {
                 workspace_id: ws_id,
-                path: ws_name,
-                git_branch: None,
+                path: path_str,
+                git_branch: branch,
                 skills_count: 0,
                 mcp_servers: vec![],
             });
@@ -72,8 +95,10 @@ pub async fn run_hyprland_listener(
     });
 
     let win_tx = event_tx.clone();
+    let win_active_ws = active_workspace.clone();
     listener.add_active_window_changed_handler(move |data| {
         let win_tx = win_tx.clone();
+        let win_active_ws = win_active_ws.clone();
         Box::pin(async move {
             if let Some(win) = data {
                 tracing::info!(
@@ -83,6 +108,9 @@ pub async fn run_hyprland_listener(
                 );
 
                 if let Ok(Some(client)) = Client::get_active_async().await {
+                    if client.pid <= 0 {
+                        return;
+                    }
                     let pid = client.pid as u32;
                     if let Some(cwd) = resolve_window_cwd(pid) {
                         let path_str = cwd.to_string_lossy().into_owned();
@@ -90,6 +118,9 @@ pub async fn run_hyprland_listener(
                         tracing::info!(
                             "Resolved active window cwd: {path_str} (branch: {branch:?})"
                         );
+
+                        // Update shared active workspace for RPC search operations
+                        *win_active_ws.write().await = Some(cwd.clone());
 
                         let sync_msg = ServerMessage::WorkspaceSync(WorkspaceSyncPayload {
                             workspace_id: client.workspace.id,

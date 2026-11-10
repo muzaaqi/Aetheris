@@ -4,10 +4,12 @@
 //! bidirectional JSON-RPC message conduit between Caelestia Shell and the daemon.
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpListener;
-use tokio::sync::{broadcast, oneshot};
+use tokio::sync::{RwLock, broadcast, oneshot};
 use tokio_tungstenite::accept_async_with_config;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
@@ -26,6 +28,7 @@ pub async fn run_server(
     event_tx: broadcast::Sender<ServerMessage>,
     shutdown: CancellationToken,
     addr_tx: oneshot::Sender<SocketAddr>,
+    active_workspace: Arc<RwLock<Option<PathBuf>>>,
 ) -> Result<()> {
     let listener = TcpListener::bind(config.addr()).await?;
     let local_addr = listener.local_addr()?;
@@ -49,9 +52,17 @@ pub async fn run_server(
                         let client_shutdown = shutdown.clone();
                         let client_event_tx = event_tx.clone();
                         let client_ws_config = ws_config;
+                        let client_active_ws = active_workspace.clone();
 
                         tokio::spawn(async move {
-                            if let Err(e) = handle_client(stream, peer_addr, client_event_tx, client_shutdown, client_ws_config).await {
+                            if let Err(e) = handle_client(
+                                stream,
+                                peer_addr,
+                                client_event_tx,
+                                client_shutdown,
+                                client_ws_config,
+                                client_active_ws,
+                            ).await {
                                 tracing::debug!("Client {peer_addr} disconnected or error: {e}");
                             }
                         });
@@ -74,6 +85,7 @@ async fn handle_client(
     event_tx: broadcast::Sender<ServerMessage>,
     shutdown: CancellationToken,
     ws_config: WebSocketConfig,
+    active_workspace: Arc<RwLock<Option<PathBuf>>>,
 ) -> Result<()> {
     let ws_stream = accept_async_with_config(stream, Some(ws_config)).await?;
     tracing::debug!("WebSocket handshake completed for {peer_addr}");
@@ -142,7 +154,12 @@ async fn handle_client(
                             }
                             Ok(ClientMessage::SearchFiles(payload)) => {
                                 tracing::debug!("Received SearchFiles from {peer_addr}: query={}", payload.query);
-                                let current_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+                                let current_dir = {
+                                    let ws_guard = active_workspace.read().await;
+                                    ws_guard.clone().unwrap_or_else(|| {
+                                        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+                                    })
+                                };
                                 let root = crate::context::find_workspace_root(&current_dir);
                                 let limit = payload.limit.unwrap_or(20);
                                 match crate::context::search_files(&root, &payload.query, limit).await {
@@ -165,7 +182,12 @@ async fn handle_client(
                             }
                             Ok(ClientMessage::ListSkills) => {
                                 tracing::debug!("Received ListSkills from {peer_addr}");
-                                let current_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+                                let current_dir = {
+                                    let ws_guard = active_workspace.read().await;
+                                    ws_guard.clone().unwrap_or_else(|| {
+                                        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+                                    })
+                                };
                                 let root = crate::context::find_workspace_root(&current_dir);
                                 match crate::context::scan_skills(Some(&root)).await {
                                     Ok(skills) => {

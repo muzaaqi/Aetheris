@@ -34,20 +34,30 @@ async fn main() -> Result<()> {
     let (event_tx, _) = broadcast::channel(config.broadcast_capacity);
     let shutdown = CancellationToken::new();
     let (addr_tx, addr_rx) = oneshot::channel();
+    let active_workspace = std::sync::Arc::new(tokio::sync::RwLock::new(None));
 
     // Spawn server task
     let server_config = config.clone();
     let server_event_tx = event_tx.clone();
     let server_shutdown = shutdown.clone();
+    let server_active_ws = active_workspace.clone();
     let mut server_task = tokio::spawn(async move {
-        run_server(&server_config, server_event_tx, server_shutdown, addr_tx).await
+        run_server(
+            &server_config,
+            server_event_tx,
+            server_shutdown,
+            addr_tx,
+            server_active_ws,
+        )
+        .await
     });
 
     // Spawn Hyprland listener task
     let hypr_event_tx = event_tx.clone();
     let hypr_shutdown = shutdown.clone();
+    let hypr_active_ws = active_workspace.clone();
     let mut hypr_task = tokio::spawn(async move {
-        match run_hyprland_listener(hypr_event_tx, hypr_shutdown).await {
+        match run_hyprland_listener(hypr_event_tx, hypr_shutdown, hypr_active_ws).await {
             Ok(()) => {
                 tracing::info!("Hyprland event listener exited cleanly");
             }
@@ -68,11 +78,19 @@ async fn main() -> Result<()> {
         if let Some(home) = std::env::var_os("HOME") {
             let brain_dir = std::path::PathBuf::from(home).join(".gemini/antigravity/brain");
             if brain_dir.exists() {
-                tracing::info!(
-                    "Monitoring Antigravity brain logs at {}",
-                    brain_dir.display()
-                );
-                let _ = watcher.watch_file(brain_dir).await;
+                if let Some(latest) = crate::transcript::find_latest_transcript(&brain_dir) {
+                    tracing::info!(
+                        "Monitoring active Antigravity session at {}",
+                        latest.display()
+                    );
+                    let _ = watcher.watch_file(latest).await;
+                } else {
+                    tracing::info!(
+                        "Monitoring Antigravity brain dir at {}",
+                        brain_dir.display()
+                    );
+                    let _ = watcher.watch_file(brain_dir).await;
+                }
             }
         }
         transcript_shutdown.cancelled().await;

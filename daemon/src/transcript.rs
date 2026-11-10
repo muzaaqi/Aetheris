@@ -4,7 +4,7 @@
 //! files with zero polling overhead and constant memory footprint.
 
 use std::io::SeekFrom;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
@@ -15,6 +15,43 @@ use tokio::task::JoinHandle;
 
 use crate::error::DaemonError;
 use crate::protocol::{ServerMessage, TokenStreamPayload};
+
+const READ_CHUNK_SIZE: usize = 64 * 1024; // 64 KB bounded chunk size
+
+/// Finds the most recently modified transcript file under an Antigravity brain directory.
+///
+/// Searches recursively for `*/.system_generated/logs/transcript.jsonl` files.
+pub fn find_latest_transcript(brain_dir: &Path) -> Option<PathBuf> {
+    if !brain_dir.is_dir() {
+        return None;
+    }
+
+    let mut latest_path = None;
+    let mut latest_time = std::time::SystemTime::UNIX_EPOCH;
+
+    let walker = ignore::WalkBuilder::new(brain_dir)
+        .hidden(false)
+        .git_ignore(false)
+        .build();
+
+    for entry in walker.flatten() {
+        let path = entry.path();
+        if path.is_file()
+            && path
+                .file_name()
+                .map(|f| f == "transcript.jsonl")
+                .unwrap_or(false)
+            && let Ok(metadata) = path.metadata()
+            && let Ok(mtime) = metadata.modified()
+            && mtime > latest_time
+        {
+            latest_time = mtime;
+            latest_path = Some(path.to_path_buf());
+        }
+    }
+
+    latest_path
+}
 
 /// Parses an individual JSONL transcript line.
 ///
@@ -34,12 +71,33 @@ pub fn parse_transcript_line(line: &str) -> Option<(String, bool)> {
         || entry_type == Some("MODEL_RESPONSE")
     {
         let content = val.get("content").and_then(|c| c.as_str()).unwrap_or("");
+        let thinking = val.get("thinking").and_then(|t| t.as_str()).unwrap_or("");
         let status = val.get("status").and_then(|s| s.as_str());
+        let has_tool_calls = val
+            .get("tool_calls")
+            .and_then(|tc| tc.as_array())
+            .map(|a| !a.is_empty())
+            .unwrap_or(false);
+
+        // If content is empty but thinking is present, stream thinking
+        let text_to_emit = if !content.is_empty() {
+            content
+        } else if !thinking.is_empty() {
+            thinking
+        } else {
+            ""
+        };
+
+        // If both content and thinking are empty (e.g. tool execution step), skip emitting premature completion
+        if text_to_emit.is_empty() && has_tool_calls {
+            return None;
+        }
+
         let done =
             status == Some("DONE") || val.get("done").and_then(|d| d.as_bool()).unwrap_or(false);
 
-        if !content.is_empty() || done {
-            return Some((content.to_string(), done));
+        if !text_to_emit.is_empty() || done {
+            return Some((text_to_emit.to_string(), done));
         }
     }
 
@@ -56,7 +114,7 @@ pub struct TranscriptWatcher {
 }
 
 struct WatcherState {
-    path: PathBuf,
+    target_path: PathBuf,
     offset: u64,
     remainder: String,
 }
@@ -70,7 +128,7 @@ impl TranscriptWatcher {
             worker: None,
             notify_tx: None,
             state: Arc::new(Mutex::new(WatcherState {
-                path: PathBuf::new(),
+                target_path: PathBuf::new(),
                 offset: 0,
                 remainder: String::new(),
             })),
@@ -78,6 +136,8 @@ impl TranscriptWatcher {
     }
 
     /// Attaches the inotify watcher to `path` and begins streaming updates.
+    ///
+    /// If `path` is a directory, resolves the latest transcript file inside it.
     pub async fn watch_file(&mut self, path: PathBuf) -> Result<(), DaemonError> {
         // Stop any previous worker
         if let Some(worker) = self.worker.take() {
@@ -85,14 +145,24 @@ impl TranscriptWatcher {
         }
         self.watcher = None;
 
-        let initial_offset = tokio::fs::metadata(&path)
-            .await
-            .map(|m| m.len())
-            .unwrap_or(0);
+        let resolved_file = if path.is_dir() {
+            find_latest_transcript(&path).unwrap_or_else(|| path.clone())
+        } else {
+            path.clone()
+        };
+
+        let initial_offset = if resolved_file.is_file() {
+            tokio::fs::metadata(&resolved_file)
+                .await
+                .map(|m| m.len())
+                .unwrap_or(0)
+        } else {
+            0
+        };
 
         {
             let mut state = self.state.lock().await;
-            state.path = path.clone();
+            state.target_path = resolved_file.clone();
             state.offset = initial_offset;
             state.remainder.clear();
         }
@@ -113,17 +183,21 @@ impl TranscriptWatcher {
         )
         .map_err(|e| DaemonError::Internal(format!("Failed to create inotify watcher: {e}")))?;
 
-        // If path exists, watch it directly or watch parent
-        let watch_target = if path.exists() {
-            path.clone()
-        } else if let Some(parent) = path.parent() {
-            parent.to_path_buf()
+        // If target is file, watch parent dir if available; if dir, watch dir
+        let watch_dir = if resolved_file.is_file() {
+            resolved_file.parent().unwrap_or(&path).to_path_buf()
         } else {
             path.clone()
         };
 
+        let mode = if path.is_dir() {
+            RecursiveMode::Recursive
+        } else {
+            RecursiveMode::NonRecursive
+        };
+
         watcher
-            .watch(&watch_target, RecursiveMode::NonRecursive)
+            .watch(&watch_dir, mode)
             .map_err(|e| DaemonError::Internal(format!("Failed to watch transcript path: {e}")))?;
 
         self.watcher = Some(watcher);
@@ -142,15 +216,25 @@ impl TranscriptWatcher {
         Ok(())
     }
 
-    /// Reads and processes any newly appended bytes from the watched file.
+    /// Reads and processes any newly appended bytes from the watched file in bounded chunks.
     async fn process_appended_bytes(
         state: &Arc<Mutex<WatcherState>>,
         event_tx: &broadcast::Sender<ServerMessage>,
     ) {
         let mut state = state.lock().await;
-        let path = state.path.clone();
+        let mut file_path = state.target_path.clone();
 
-        let mut file = match File::open(&path).await {
+        // If target is directory, check if a transcript file has appeared
+        if file_path.is_dir() {
+            if let Some(found) = find_latest_transcript(&file_path) {
+                file_path = found;
+                state.target_path = file_path.clone();
+            } else {
+                return;
+            }
+        }
+
+        let mut file = match File::open(&file_path).await {
             Ok(f) => f,
             Err(_) => return,
         };
@@ -181,29 +265,28 @@ impl TranscriptWatcher {
         }
 
         let bytes_to_read = (file_len - state.offset) as usize;
-        let mut buffer = vec![0u8; bytes_to_read];
-        if let Err(e) = file.read_exact(&mut buffer).await {
-            tracing::warn!("Failed to read new transcript bytes: {e}");
-            return;
-        }
+        let mut remaining = bytes_to_read;
+        let mut chunk_buf = vec![0u8; READ_CHUNK_SIZE];
 
-        state.offset = file_len;
+        while remaining > 0 {
+            let to_read = remaining.min(READ_CHUNK_SIZE);
+            if let Err(e) = file.read_exact(&mut chunk_buf[..to_read]).await {
+                tracing::warn!("Failed to read transcript chunk: {e}");
+                return;
+            }
+            remaining -= to_read;
+            state.offset += to_read as u64;
 
-        let incoming_text = String::from_utf8_lossy(&buffer);
-        let full_text = format!("{}{}", state.remainder, incoming_text);
+            let incoming_text = String::from_utf8_lossy(&chunk_buf[..to_read]);
+            state.remainder.push_str(&incoming_text);
 
-        let mut lines: Vec<&str> = full_text.split('\n').collect();
-        // The last element is either empty (if ended with \n) or incomplete remainder
-        if let Some(tail) = lines.pop() {
-            state.remainder = tail.to_string();
-        } else {
-            state.remainder.clear();
-        }
-
-        for line in lines {
-            if let Some((token, done)) = parse_transcript_line(line) {
-                let msg = ServerMessage::TokenStream(TokenStreamPayload { token, done });
-                let _ = event_tx.send(msg);
+            while let Some(pos) = state.remainder.find('\n') {
+                let line = state.remainder[..pos].to_string();
+                state.remainder.drain(..=pos);
+                if let Some((token, done)) = parse_transcript_line(&line) {
+                    let msg = ServerMessage::TokenStream(TokenStreamPayload { token, done });
+                    let _ = event_tx.send(msg);
+                }
             }
         }
     }
