@@ -1,11 +1,14 @@
 //! Aetheris Daemon
 //! OS-Level AI Agent HUD background service for Hyprland and Caelestia Shell.
 
+pub mod adapters;
 pub mod config;
+pub mod context;
 pub mod error;
 pub mod hyprland;
 pub mod protocol;
 pub mod server;
+pub mod transcript;
 
 use std::time::Duration;
 
@@ -57,6 +60,24 @@ async fn main() -> Result<()> {
         }
     });
 
+    // Initialize Transcript Watcher for Antigravity session streaming
+    let transcript_event_tx = event_tx.clone();
+    let transcript_shutdown = shutdown.clone();
+    let mut transcript_task = tokio::spawn(async move {
+        let mut watcher = crate::transcript::TranscriptWatcher::new(transcript_event_tx);
+        if let Some(home) = std::env::var_os("HOME") {
+            let brain_dir = std::path::PathBuf::from(home).join(".gemini/antigravity/brain");
+            if brain_dir.exists() {
+                tracing::info!(
+                    "Monitoring Antigravity brain logs at {}",
+                    brain_dir.display()
+                );
+                let _ = watcher.watch_file(brain_dir).await;
+            }
+        }
+        transcript_shutdown.cancelled().await;
+    });
+
     // Log bound address once available
     if let Ok(addr) = addr_rx.await {
         tracing::info!("Aetheris ready for connections at ws://{addr}");
@@ -99,9 +120,9 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Gracefully drain both tasks within a bounded timeout
+    // Gracefully drain all tasks within a bounded timeout
     let _ = tokio::time::timeout(Duration::from_secs(2), async {
-        let _ = tokio::join!(&mut server_task, &mut hypr_task);
+        let _ = tokio::join!(&mut server_task, &mut hypr_task, &mut transcript_task);
     })
     .await;
 

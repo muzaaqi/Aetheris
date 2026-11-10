@@ -10,6 +10,19 @@ use ignore::WalkBuilder;
 use crate::error::DaemonError;
 use crate::protocol::{FileMatch, SkillInfo, SkillScope};
 
+/// Finds the root project directory by traversing upward until `.git` or `.agents` is found.
+pub fn find_workspace_root(start: &Path) -> PathBuf {
+    let mut current = start.to_path_buf();
+    loop {
+        if current.join(".git").exists() || current.join(".agents").exists() {
+            return current;
+        }
+        if !current.pop() {
+            return start.to_path_buf();
+        }
+    }
+}
+
 /// Search files under `root` matching `query`, respecting gitignore rules.
 ///
 /// Executes on a blocking worker thread to avoid stalling Tokio async runtimes.

@@ -142,9 +142,45 @@ async fn handle_client(
                             }
                             Ok(ClientMessage::SearchFiles(payload)) => {
                                 tracing::debug!("Received SearchFiles from {peer_addr}: query={}", payload.query);
+                                let current_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+                                let root = crate::context::find_workspace_root(&current_dir);
+                                let limit = payload.limit.unwrap_or(20);
+                                match crate::context::search_files(&root, &payload.query, limit).await {
+                                    Ok(matches) => {
+                                        let resp = ServerMessage::FileResults(crate::protocol::FileResultsPayload {
+                                            query: payload.query,
+                                            matches,
+                                        });
+                                        if let Ok(json) = serde_json::to_string(&resp)
+                                            && let Err(e) = sink.send(Message::Text(json.into())).await
+                                        {
+                                            tracing::debug!("Failed to send FileResults to {peer_addr}: {e}");
+                                            break;
+                                        }
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!("SearchFiles failed for {peer_addr}: {e}");
+                                    }
+                                }
                             }
                             Ok(ClientMessage::ListSkills) => {
                                 tracing::debug!("Received ListSkills from {peer_addr}");
+                                let current_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+                                let root = crate::context::find_workspace_root(&current_dir);
+                                match crate::context::scan_skills(Some(&root)).await {
+                                    Ok(skills) => {
+                                        let resp = ServerMessage::SkillsList(crate::protocol::SkillsListPayload { skills });
+                                        if let Ok(json) = serde_json::to_string(&resp)
+                                            && let Err(e) = sink.send(Message::Text(json.into())).await
+                                        {
+                                            tracing::debug!("Failed to send SkillsList to {peer_addr}: {e}");
+                                            break;
+                                        }
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!("ListSkills failed for {peer_addr}: {e}");
+                                    }
+                                }
                             }
                             Err(e) => {
                                 tracing::warn!("Received invalid ClientMessage JSON from {peer_addr}: {e}");
