@@ -7,9 +7,14 @@ Item {
     id: root
 
     property alias messageModel: messageListView.model
+    property alias fileMatches: mentionPopup.matches
     property bool isConnected: true
     property var attachments: []
+    property bool mentionQueryActive: false
+    property int mentionStartIndex: -1
+
     signal sendRequested(string text, var attachments)
+    signal fileSearchRequested(string query)
 
     function submitPrompt() {
         if (!root.isConnected)
@@ -20,6 +25,8 @@ Item {
             root.sendRequested(trimmed, root.attachments.slice());
             inputField.text = "";
             root.attachments = [];
+            root.mentionQueryActive = false;
+            root.mentionStartIndex = -1;
         }
     }
 
@@ -39,6 +46,34 @@ Item {
         root.attachments = list;
     }
 
+    function checkMention() {
+        const text = inputField.text;
+        const atIndex = text.lastIndexOf("@");
+        if (atIndex !== -1) {
+            const candidate = text.substring(atIndex + 1);
+            if (candidate.indexOf(" ") === -1 && candidate.indexOf("\n") === -1 && candidate.indexOf("\t") === -1) {
+                root.mentionStartIndex = atIndex;
+                root.mentionQueryActive = true;
+                root.fileSearchRequested(candidate);
+                return;
+            }
+        }
+        root.mentionQueryActive = false;
+        root.mentionStartIndex = -1;
+    }
+
+    function insertMention(path) {
+        if (root.mentionStartIndex >= 0) {
+            const text = inputField.text;
+            const prefix = text.substring(0, root.mentionStartIndex);
+            const newText = prefix + "@" + path + " ";
+            inputField.text = newText;
+            inputField.cursorPosition = newText.length;
+        }
+        root.mentionQueryActive = false;
+        root.mentionStartIndex = -1;
+    }
+
     function focusInput() {
         inputField.forceActiveFocus();
     }
@@ -49,6 +84,26 @@ Item {
             for (let i = 0; i < paths.length; i++) {
                 root.addAttachment(paths[i]);
             }
+        }
+    }
+
+    FileMentionPopup {
+        id: mentionPopup
+
+        z: 10
+        anchors {
+            bottom: inputContainer.top
+            bottomMargin: Tokens.spacing.small
+            left: inputContainer.left
+        }
+        width: Math.min(360, inputContainer.width)
+        visible: Boolean(mentionPopup.matches && mentionPopup.matches.length > 0 && root.mentionQueryActive)
+
+        onFileSelected: function(path) {
+            root.insertMention(path);
+        }
+        onDismissed: {
+            root.mentionQueryActive = false;
         }
     }
 
@@ -97,7 +152,6 @@ Item {
 
                     width: messageListView.width
                     implicitHeight: bubbleRect.implicitHeight + Tokens.spacing.extraSmall
-
                     StyledRect {
                         id: bubbleRect
 
@@ -220,8 +274,37 @@ Item {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignVCenter
 
-                    Keys.onReturnPressed: function(event) {
-                        if (!(event.modifiers & Qt.ShiftModifier)) {
+                    onTextChanged: {
+                        root.checkMention();
+                    }
+
+                    Keys.onPressed: function(event) {
+                        if (mentionPopup.visible) {
+                            if (event.key === Qt.Key_Down) {
+                                mentionPopup.selectNext();
+                                event.accepted = true;
+                                return;
+                            }
+                            if (event.key === Qt.Key_Up) {
+                                mentionPopup.selectPrevious();
+                                event.accepted = true;
+                                return;
+                            }
+                            if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !(event.modifiers & Qt.ShiftModifier)) {
+                                if (mentionPopup.matches && mentionPopup.matches.length > 0) {
+                                    mentionPopup.triggerSelection();
+                                    event.accepted = true;
+                                    return;
+                                }
+                            }
+                            if (event.key === Qt.Key_Escape) {
+                                root.mentionQueryActive = false;
+                                event.accepted = true;
+                                return;
+                            }
+                        }
+
+                        if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !(event.modifiers & Qt.ShiftModifier)) {
                             root.submitPrompt();
                             event.accepted = true;
                         }
