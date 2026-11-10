@@ -103,10 +103,10 @@ Aetheris eliminates this friction by making the agent **ambient, omnipresent, an
 ## 5. Phased Milestones & Acceptance Criteria
 
 ### Phase 1: Core Foundation & Communication MVP
-- [ ] Rust daemon boots and listens on `ws://127.0.0.1:21420`.
-- [ ] Hyprland workspace listener tracks active workspace and logs directory changes.
-- [ ] Caelestia top bar button renders and toggles the basic dropdown QML chat window.
-- [ ] Basic prompt submission sends text to daemon and receives streamed echo tokens.
+- [x] Rust daemon boots and listens on `ws://127.0.0.1:21420`.
+- [x] Hyprland workspace listener tracks active workspace and logs directory changes.
+- [x] Caelestia top bar button renders and toggles the basic dropdown QML chat window.
+- [x] Basic prompt submission sends text to daemon and receives streamed echo tokens.
 
 ### Phase 2: Context Awareness & Multi-Platform
 - [ ] Live Antigravity transcript watcher streams active assistant messages to the HUD.
