@@ -12,3 +12,8 @@ Cargo.lock
 *.swp
 *.swo
 .DS_Store
+
+# Agent tool symlinks
+.claude/
+agent/
+
