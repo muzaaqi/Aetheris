@@ -2,28 +2,28 @@
 
 > **OS-Level AI Agent HUD for Hyprland & Caelestia Shell**
 
-Aetheris adalah antarmuka percakapan dan orkestrasi agent AI tingkat sistem operasi yang tertanam langsung di panel atas (*top bar*) desktop Hyprland.
+Aetheris is an operating-system-level AI agent conversational and orchestration interface embedded directly into the top bar of the Hyprland desktop environment.
 
-Ditenagai oleh daemon latar belakang ultra-ringan berbasis **Rust** (~8 MB RAM) dan antarmuka **Caelestia Quickshell (QML)**.
-
----
-
-## 🏛️ Arsitektur Singkat
-
-- **`daemon/`**: Backend service dalam bahasa Rust (`tokio`, `hyprland-rs`, `notify`, `ignore`). Bertanggung jawab mendeteksi workspace Hyprland aktif, membaca transcript sesi Antigravity secara real-time, memuat skill lokal/global, dan melayani komunikasi WebSocket lokal.
-- **`qml/`**: Komponen antarmuka pengguna Caelestia Quickshell (Top bar icon button & dropdown HUD glassmorphic overlay).
-- **`docs/`**: Dokumentasi spesifikasi arsitektur (`DESIGN.md`).
-- **`systemd/`**: Unit file `aetheris.service` untuk autostart background daemon sebagai user service.
+Powered by an ultra-lightweight **Rust** background daemon (~8 MB RAM) and a native **Caelestia Quickshell (QML)** frontend.
 
 ---
 
-## 🚀 Status Proyek
+## 🏛️ Architecture Overview
 
-- [x] Spesifikasi Desain & Protokol WebSocket (`docs/DESIGN.md`)
-- [ ] **Fase 1:** Rust Daemon Core + QML Top Bar MVP
-- [ ] **Fase 2:** Konteks Proyek, Mention `@file`, & Live Antigravity Transcript Stream
-- [ ] **Fase 3:** Safety Controls, Human-in-the-Loop Inline Approval, & MCP Visualizer
-- [ ] **Fase 4:** Quote Engine, Thinking Slider, & Dynamic Bar Status Icon
-- [ ] **Fase 5:** Token Tracker, Snip-to-Prompt Vision, & Artifacts Split-View
+- **`daemon/`**: Backend service written in Rust (`tokio`, `hyprland-rs`, `notify`, `ignore`). Responsible for tracking the active Hyprland workspace, watching Antigravity transcript logs in real-time, scanning local/global skills, and serving the local WebSocket JSON-RPC protocol.
+- **`qml/`**: Caelestia Quickshell user interface modules (Top bar status icon & glassmorphic dropdown HUD overlay).
+- **`docs/`**: Full architectural and protocol specifications (`DESIGN.md`).
+- **`systemd/`**: User service unit (`aetheris.service`) for seamless background autostart.
 
-Lihat dokumentasi lengkap di [docs/DESIGN.md](docs/DESIGN.md).
+---
+
+## 🚀 Project Roadmap
+
+- [x] Design & WebSocket Protocol Specifications (`docs/DESIGN.md`)
+- [ ] **Phase 1:** Rust Daemon Core + QML Top Bar MVP
+- [ ] **Phase 2:** Project Context, `@file` Mentions, & Live Antigravity Transcript Streaming
+- [ ] **Phase 3:** Safety Controls, Human-in-the-Loop Inline Approval, & MCP Visualizer
+- [ ] **Phase 4:** Quote Engine, Thinking Slider, & Dynamic Bar Status Icon
+- [ ] **Phase 5:** Token Tracker, Snip-to-Prompt Vision, & Artifacts Split-View
+
+For full technical specifications, see [docs/DESIGN.md](docs/DESIGN.md).

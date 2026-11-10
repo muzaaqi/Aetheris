@@ -1,36 +1,36 @@
-# Spesifikasi Desain & Arsitektur: Aetheris — OS-Level AI Agent HUD
+# Design & Architecture Specification: Aetheris — OS-Level AI Agent HUD
 
-> **Nama Proyek:** Aetheris  
+> **Project Name:** Aetheris  
 > **Status:** Approved / Ready for Build  
-> **Platform Target:** Linux (Hyprland + Caelestia Quickshell)  
-> **Teknologi Utama:** Rust (Backend Daemon) + QML / Quickshell (Frontend Bar & HUD)  
-> **Integrasi Agent:** Antigravity (Google DeepMind), Claude Code (Anthropic), Direct LLM API (via 9router / OpenRouter)
+> **Target Platform:** Linux (Hyprland + Caelestia Quickshell)  
+> **Core Technologies:** Rust (Backend Daemon) + QML / Quickshell (Frontend Bar & HUD)  
+> **Agent Integrations:** Antigravity (Google DeepMind), Claude Code (Anthropic), Direct LLM API (via 9router / OpenRouter)
 
 ---
 
-## 1. Ringkasan Eksekutif & Visi Produk
+## 1. Executive Summary & Product Vision
 
-**Aetheris** adalah antarmuka percakapan dan orkestrasi agent AI tingkat sistem operasi yang tertanam langsung di panel atas (*top bar*) desktop Hyprland. 
+**Aetheris** is an operating-system-level AI agent conversational and orchestration interface embedded directly into the top bar of the Hyprland desktop environment.
 
-Nama **Aetheris** diambil dari *Aether* (udara murni para dewa di langit tertinggi dalam mitologi Yunani), selaras dengan ekosistem desktop *Caelestia* dan *Hyprland*.
+The name **Aetheris** is derived from *Aether* (the pure, radiant upper air breathed by the gods in Greek mythology), harmonizing naturally with the celestial naming convention of *Caelestia* and the radiance of *Hyprland* (Hyperion).
 
-Berbeda dengan antarmuka chat berbasis web atau terminal terpisah, Aetheris bertindak sebagai **pusat kendali agent cerdas yang sadar konteks (*context-aware*)**:
-- Menempel secara visual dan mulus di bar Caelestia Shell (Glassmorphic, Material 3, mengikuti `scheme.current`).
-- Otomatis mendeteksi workspace aktif di Hyprland (berpindah ke workspace proyek langsung berganti konteks, file repo, sesi, dan skill terkait).
-- Menjadi jembatan visual untuk engine agent CLI yang sudah ada (Antigravity CLI, Claude Code), membaca transcript secara live, serta menyediakan kontrol perizinan (*human-in-the-loop approval*) dan pratinjau perubahan kode (*diff viewer*).
+Unlike detached web chat interfaces or standalone terminal windows, Aetheris acts as a **system-level, context-aware agent control center**:
+- Visually and seamlessly integrated into the Caelestia Shell bar (Glassmorphic, Material 3, dynamic theming matching `scheme.current`).
+- Automatically tracks the active Hyprland workspace: switching to a project workspace immediately shifts context, repository files, active session, and scoped skills.
+- Serves as a unified visual HUD for existing CLI agent engines (Antigravity CLI, Claude Code), streaming transcripts in real-time, providing human-in-the-loop safety approvals, and rendering code diff previews.
 
 ---
 
-## 2. Arsitektur Sistem
+## 2. System Architecture
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                      HYPRLAND DESKTOP ENVIRONMENT                      │
 ├────────────────────────────────────────────────────────────────────────┤
 │  Top Bar (Caelestia QML)                                               │
-│  [ Workspace Pager ]    [ Agent HUD Icon 🟢 ]    [ Clock & Status ]   │
+│  [ Workspace Pager ]    [ Aetheris Icon 🟢 ]    [ Clock & Status ]     │
 └───────────────────────────────────┬────────────────────────────────────┘
-                                    │ Klik / Shortcut (SUPER + Space)
+                                    │ Click / Shortcut (SUPER + Space)
 ┌───────────────────────────────────▼────────────────────────────────────┐
 │                  CAELESTIA QML HUD OVERLAY (FRONTEND)                  │
 │  - Mode Bar: [Antigravity ▼] [⚡ YOLO / 🛡️ Safe] [Thinking: Med ▼]    │
@@ -40,14 +40,14 @@ Berbeda dengan antarmuka chat berbasis web atau terminal terpisah, Aetheris bert
 └───────────────────────────────────▲────────────────────────────────────┘
                                     │ Local WebSocket (ws://127.0.0.1:21420)
 ┌───────────────────────────────────▼────────────────────────────────────┐
-│                    AGENT-HUD-DAEMON (RUST BACKEND)                     │
+│                    AETHERIS-DAEMON (RUST BACKEND)                      │
 │  Memory Footprint: ~8 MB RAM | Zero-GC | tokio async runtime           │
 │                                                                        │
 │  ┌───────────────────────┐  ┌──────────────────────────────────────┐  │
 │  │   Hyprland Monitor    │  │          Transcript Watcher          │  │
 │  │   (hyprland-rs IPC)   │  │       (notify inotify engine)        │  │
-│  │ - Deteksi workspace   │  │ - Watch Antigravity transcript.jsonl │  │
-│  │ - Auto-detect active  │  │ - Stream token & tool calls live     │  │
+│  │ - Workspace detection │  │ - Watch Antigravity transcript.jsonl │  │
+│  │ - Auto-detect active  │  │ - Live token & tool call streaming   │  │
 │  │   working directory   │  │                                      │  │
 │  └───────────────────────┘  └──────────────────────────────────────┘  │
 │                                                                        │
@@ -71,76 +71,77 @@ Berbeda dengan antarmuka chat berbasis web atau terminal terpisah, Aetheris bert
 
 ---
 
-## 3. Spesifikasi Fitur Terinci
+## 3. Detailed Feature Specifications
 
 ### A. Workspace & Context Binding
-- **Deteksi Otomatis:** Daemon mendengarkan event socket Hyprland (`activeworkspace` dan `activewindow`).
-- **Path Resolution:** Menentukan direktori kerja aktif berdasarkan jendela yang sedang fokus (misal terminal WezTerm di `~/Projects/MuMu` atau Zed editor di `~/.config/hypr`).
-- **Session Isolation:** Setiap path memiliki sesi obrolannya sendiri. Saat berpindah dari Workspace 1 ke Workspace 2, HUD otomatis mengalihkan riwayat dan konteks agent.
+- **Automatic Detection:** The daemon subscribes to the Hyprland IPC socket events (`activeworkspace` and `activewindow`).
+- **Path Resolution:** Resolves the active project working directory based on the focused window (e.g., WezTerm terminal inside `~/Projects/MuMu` or Zed editor inside `~/.config/hypr`).
+- **Session Isolation:** Each project path maintains its own distinct chat session. Switching from Workspace 1 to Workspace 2 automatically hot-swaps the chat history, active git branch, and context.
 
 ### B. Universal Multi-Platform Adapter
-Menyediakan pengalaman terpadu untuk engine yang berbeda:
+Provides a seamless unified experience across distinct agent backends:
 1. **Antigravity Adapter:**
-   - Memantau `<appDataDir>/brain/<id>/.system_generated/logs/transcript.jsonl` menggunakan `notify`.
-   - Mengirim input via subprocess atau IPC socket.
+   - Watches `<appDataDir>/brain/<id>/.system_generated/logs/transcript.jsonl` using kernel `inotify`.
+   - Dispatches user prompts via Antigravity subprocess or session socket.
 2. **Claude Code Adapter:**
-   - Membaca dan menulis ke sesi Claude Code (`claude --dangerously-skip-permissions` atau standard mode).
+   - Manages Claude Code processes (`claude --dangerously-skip-permissions` or standard interactive mode).
 3. **Direct API Adapter:**
-   - Menghubungkan langsung ke endpoint OpenAI/Anthropic/Gemini melalui proxy lokal **9router** (`http://127.0.0.1:20128`).
+   - Directly connects to frontier and open-source models via local proxy **9router** (`http://127.0.0.1:20128`) or cloud provider APIs.
 
-### C. Normalisasi Mode & Effort
+### C. Mode & Thinking Effort Normalization
 - **Mode Slider:**
-  - `Safe Mode`: Mencegat pemanggilan tool dan menunggu klik persetujuan `[Approve]` dari pengguna.
-  - `Auto / YOLO Mode`: Memasukkan parameter *auto-accept* (`--mode=accept-edits` untuk Antigravity, `--dangerously-skip-permissions` untuk Claude Code).
-  - `Plan-Only Mode`: Membatasi agent ke mode analisis dan penulisan rencana tanpa izin mengedit file.
-- **Thinking Slider:**
-  - Pengatur universal: `Off` | `Low` | `Medium` | `High`.
-  - Diterjemahkan ke parameter asli masing-masing model (misal `budget_tokens` untuk Claude 3.7, `reasoning_effort` untuk OpenAI o3-mini, `thinkingBudget` untuk Gemini Thinking).
+  - `Safe Mode`: Intercepts tool execution and displays an inline `[Approve]` / `[Reject]` prompt for the user.
+  - `Auto / YOLO Mode`: Enables autonomous tool execution (`--mode=accept-edits` for Antigravity, `--dangerously-skip-permissions` for Claude Code).
+  - `Plan-Only Mode`: Restricts the agent to read-only codebase surveying, generating architectural artifacts without modifying files.
+- **Thinking Effort Slider:**
+  - Universal UI slider: `Off` | `Low` | `Medium` | `High`.
+  - Automatically mapped to model-native budget tokens (e.g., `budget_tokens` on Claude 3.7 Sonnet, `reasoning_effort` on OpenAI o3-mini, `thinkingBudget` on Gemini 2.0 Flash Thinking).
+  - Automatically dimmed/disabled when the active model does not support variable reasoning effort.
 
 ### D. Skill & MCP Discovery
-- **User-Scope Skills:** Membaca skill dari `~/.gemini/antigravity-cli/builtin/skills`, `~/.gemini/skills`, dan `~/.agents/skills`.
-- **Workspace-Scope Skills:** Membaca skill lokal dari `<workspace>/.agents/skills`.
-- **MCP Visualizer:** Saat agent menjalankan tool MCP (misal: query Neon DB atau dokumentasi Context7), HUD menampilkan kartu tool informatif lengkap dengan status eksekusi.
+- **User-Scope Skills:** Scans and indexes global skills from `~/.gemini/antigravity-cli/builtin/skills`, `~/.gemini/skills`, and `~/.agents/skills`.
+- **Workspace-Scope Skills:** Discovers project-specific skills from `<workspace>/.agents/skills`.
+- **MCP Visualizer:** Intercepts Model Context Protocol (MCP) tool calls (e.g., Neon SQL queries, Context7 lookups) and renders interactive tool cards displaying tool arguments, execution progress, and collapsible output payloads.
 
-### E. Interaksi File & Quote Engine
-- **Mention `@file` & `@dir`:** Mengetik `@` memunculkan dropdown autocomplete file proyek menggunakan algoritma fuzzy search super cepat (`ignore` crate).
-- **Drag-and-Drop:** File atau gambar yang di-drop ke area chat otomatis dilampirkan ke pesan.
-- **Quote Selection:** Meng-highlight teks pada jawaban agent memunculkan tombol `[Quote]` untuk memasukkan teks ke prompt sebagai blok kutipan `> ...`.
-- **Smart Code Quote:** Tombol `[Quote]` pada setiap blok kode otomatis menyertakan nama file dan rentang baris (`> [src/index.ts:40-55]`).
+### E. File Interaction & Quote Engine
+- **File & Directory Mentions (`@file` & `@dir`):** Typing `@` triggers an instant fuzzy search popover scoped to the active git repository (powered by Rust's `ignore` and `walkdir` crates).
+- **Drag-and-Drop:** Native QML `DropArea` enables dragging files or screenshots directly from file managers into the chat input.
+- **Selection Quoting:** Highlighting any snippet in the agent's response displays a floating `[Quote]` button (or `Alt + Q`) to insert the snippet as a Markdown quote block (`> ...`).
+- **Smart Code Block Quoting:** Every code block features a `[Quote]` button that preserves source file path and line number ranges (e.g., `> [src/index.ts:40-55]`).
 
-### F. Status Top Bar & Notifikasi
-- Icon di bar Caelestia memiliki 4 status warna:
-  - 🟢 **Idle / Siap**
-  - 🟡 **Thinking / Menjalankan Task**
-  - 🔴 **Perlu Persetujuan (Approval Diperlukan)**
-  - 🔵 **Subagent / Background Job Berjalan**
-- Notifikasi desktop via `notify-send` dikirimkan saat task selesai atau saat membutuhkan perhatian pengguna.
+### F. Top Bar Status & Notifications
+- Dynamic top bar icon states:
+  - 🟢 **Idle / Ready**
+  - 🟡 **Thinking / Executing Command**
+  - 🔴 **Action Required (Needs Tool Approval)**
+  - 🔵 **Background Task / Subagent Active**
+- Desktop notifications via `notify-send` when long background tasks finish or when the agent requests permissions.
 
 ---
 
-## 4. Protokol Komunikasi (WebSocket JSON-RPC)
+## 4. Communication Protocol (WebSocket JSON-RPC)
 
-Frontend QML dan Backend Rust berkomunikasi melalui WebSocket lokal (`ws://127.0.0.1:21420`):
+Frontend (QML) and Backend (Rust) communicate over a local WebSocket (`ws://127.0.0.1:21420`):
 
 ### Client $\rightarrow$ Daemon
 ```json
-// Mengirim pesan
+// Send message with quote
 {
   "type": "send_message",
   "payload": {
-    "text": "Tolong audit performa query ini",
-    "attachments": ["/path/to/file.png"],
+    "text": "Please audit this query performance",
+    "attachments": ["/path/to/screenshot.png"],
     "quote": { "source": "src/db.ts:12-20", "text": "const res = await db.query..." }
   }
 }
 
-// Menyetujui eksekusi tool
+// Approve or reject tool call
 {
   "type": "tool_approval",
   "payload": { "tool_call_id": "call_12345", "approved": true }
 }
 
-// Mengubah setting
+// Update configuration
 {
   "type": "update_config",
   "payload": { "platform": "antigravity", "mode": "safe", "thinking": "medium" }
@@ -152,10 +153,10 @@ Frontend QML dan Backend Rust berkomunikasi melalui WebSocket lokal (`ws://127.0
 // Token streaming
 {
   "type": "token_stream",
-  "payload": { "token": "Berikut ", "done": false }
+  "payload": { "token": "Here is ", "done": false }
 }
 
-// Permintaan izin tool
+// Tool execution approval request
 {
   "type": "tool_call_request",
   "payload": {
@@ -166,7 +167,7 @@ Frontend QML dan Backend Rust berkomunikasi melalui WebSocket lokal (`ws://127.0
   }
 }
 
-// Status workspace
+// Workspace state synchronization
 {
   "type": "workspace_sync",
   "payload": {
@@ -181,46 +182,48 @@ Frontend QML dan Backend Rust berkomunikasi melalui WebSocket lokal (`ws://127.0
 
 ---
 
-## 5. Rencana Tahapan Implementasi (Implementation Roadmap)
+## 5. Implementation Roadmap
 
-| Tahap | Fokus Pekerjaan | Deliverable |
+| Phase | Milestone | Deliverables |
 |---|---|---|
-| **Fase 1 (MVP)** | Rust Daemon Core + QML Top Bar | WebSocket server, deteksi workspace Hyprland, widget QML top bar dengan popout chat, streaming teks dasar. |
-| **Fase 2** | Konteks & Multi-Platform | File mention `@`, drag-and-drop file QML, scanner skill 2-tingkat, adapter Antigravity live transcript watcher. |
-| **Fase 3** | Keamanan & Eksekusi | Tool call visualizer, tombol inline approval, mode switcher (Safe / YOLO / Plan), MCP support, diff viewer. |
-| **Fase 4** | UX Ergonomics | Quote selection & code block quote, slider thinking effort, status icon dinamis di top bar, notifikasi desktop. |
-| **Fase 5** | Polish & Vision | Token tracker, kamera screenshot snip-to-prompt, tab viewer dokumen artefak & diagram Mermaid. |
+| **Phase 1 (MVP)** | Rust Daemon Core + QML Top Bar | Local WebSocket server, Hyprland workspace listener, Caelestia top bar button, dropdown chat overlay, basic token streaming. |
+| **Phase 2** | Project Context & Multi-Platform | `@file` mentions, native drag-and-drop file attachment, 2-tier skill scanner, Antigravity live transcript watcher. |
+| **Phase 3** | Execution Safety & Guardrails | Tool call visualizer cards, inline approval buttons, mode switcher (Safe / YOLO / Plan), MCP discovery, inline diff viewer. |
+| **Phase 4** | UX Ergonomics & Polish | Selection quote & smart code block quote, universal thinking slider, dynamic status bar icon, desktop notifications. |
+| **Phase 5** | Observability & Vision | Token/cost quota tracker, screen snip-to-prompt camera button, artifacts & Mermaid diagram split-view. |
 
 ---
 
-## 6. Lokasi Proyek & File Structure
+## 6. Project Structure
 
 ```
-~/.config/agent-hud/
-├── Cargo.toml                    # Rust crate manifest
-├── src/
-│   ├── main.rs                   # Entry point, tokio WebSocket server
-│   ├── hyprland.rs               # Hyprland IPC listener & workspace tracker
-│   ├── transcript.rs             # Inotify watcher untuk Antigravity transcript.jsonl
-│   ├── context.rs                # File indexer (@file) & skill scanner
-│   ├── adapters/                 # Multi-platform adapters
-│   │   ├── mod.rs
-│   │   ├── antigravity.rs
-│   │   ├── claude.rs
-│   │   └── direct_api.rs
-│   └── protocol.rs               # Serde models JSON-RPC
-└── systemd/
-    └── agent-hud.service         # User systemd service unit
-
-~/.config/quickshell/caelestia/
-└── modules/bar/
-    ├── components/
-    │   └── AgentHudButton.qml    # Icon status di bar atas
-    └── popouts/
-        ├── AgentHudPopout.qml    # Window overlay chat & tool visualizer
-        └── components/
-            ├── ChatView.qml
-            ├── ToolCard.qml
-            ├── ModeBar.qml
-            └── FileDropArea.qml
+~/Projects/Aetheris/
+├── daemon/                    # Rust backend daemon
+│   ├── Cargo.toml             # Dependencies (tokio, hyprland, notify, ignore, serde)
+│   └── src/
+│       ├── main.rs            # Entry point & WebSocket server
+│       ├── hyprland.rs        # Hyprland IPC listener & workspace tracker
+│       ├── transcript.rs      # Kernel inotify watcher for Antigravity transcripts
+│       ├── context.rs         # Fast fuzzy file indexer & skill scanner
+│       ├── adapters/          # Multi-platform adapters
+│       │   ├── mod.rs
+│       │   ├── antigravity.rs
+│       │   ├── claude.rs
+│       │   └── direct_api.rs
+│       └── protocol.rs        # JSON-RPC serde data models
+├── qml/                       # Caelestia Quickshell components
+│   ├── AgentHudButton.qml     # Top bar status icon
+│   └── popouts/
+│       ├── AgentHudPopout.qml # Glassmorphic dropdown HUD overlay
+│       └── components/
+│           ├── ChatView.qml
+│           ├── ToolCard.qml
+│           ├── ModeBar.qml
+│           └── FileDropArea.qml
+├── docs/
+│   └── DESIGN.md              # Full architectural specification
+├── systemd/
+│   └── aetheris.service       # Systemd user service unit
+├── .gitignore
+└── README.md                  # Project overview
 ```
