@@ -109,11 +109,11 @@ Aetheris eliminates this friction by making the agent **ambient, omnipresent, an
 - [x] Basic prompt submission sends text to daemon and receives streamed echo tokens.
 
 ### Phase 2: Context Awareness & Multi-Platform
-- [ ] Live Antigravity transcript watcher streams active assistant messages to the HUD.
-- [ ] Workspace path auto-switches active session when moving between Hyprland workspaces.
-- [ ] `@file` mention fuzzy search popover works with project files.
-- [ ] File and image drag-and-drop into QML target functional.
-- [ ] 2-tier skill scanner indexes global and workspace skills.
+- [x] Live Antigravity transcript watcher streams active assistant messages to the HUD.
+- [x] Workspace path auto-switches active session when moving between Hyprland workspaces.
+- [x] `@file` mention fuzzy search popover works with project files.
+- [x] File and image drag-and-drop into QML target functional.
+- [x] 2-tier skill scanner indexes global and workspace skills.
 
 ### Phase 3: Safety Guardrails & Tool Execution
 - [ ] Inline Tool Cards render for tool calls (`run_command`, `write_file`, MCP).
