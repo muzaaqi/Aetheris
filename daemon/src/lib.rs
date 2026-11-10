@@ -4,6 +4,7 @@
 //! and server orchestration.
 
 pub mod config;
+pub mod context;
 pub mod error;
 pub mod hyprland;
 pub mod protocol;

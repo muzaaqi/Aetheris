@@ -24,7 +24,14 @@ pub enum AetherisError {
     /// Daemon configuration errors.
     #[error("Configuration error: {0}")]
     Config(String),
+
+    /// Internal daemon worker or concurrency errors.
+    #[error("Internal error: {0}")]
+    Internal(String),
 }
+
+/// Backward/plan-compatible alias for the daemon error type.
+pub type DaemonError = AetherisError;
 
 impl From<tokio_tungstenite::tungstenite::Error> for AetherisError {
     fn from(err: tokio_tungstenite::tungstenite::Error) -> Self {
