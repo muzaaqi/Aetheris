@@ -4,6 +4,7 @@
 pub mod config;
 pub mod error;
 pub mod protocol;
+pub mod server;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

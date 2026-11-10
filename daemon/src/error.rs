@@ -9,13 +9,13 @@ pub enum AetherisError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
-    /// WebSocket protocol and connection errors.
+    /// WebSocket protocol and connection errors (boxed to minimize enum footprint).
     #[error("WebSocket error: {0}")]
-    WebSocket(#[from] tokio_tungstenite::tungstenite::Error),
+    WebSocket(Box<tokio_tungstenite::tungstenite::Error>),
 
-    /// Hyprland IPC communication errors.
+    /// Hyprland IPC communication errors (boxed to minimize enum footprint).
     #[error("Hyprland IPC error: {0}")]
-    Hyprland(#[from] hyprland::error::HyprError),
+    Hyprland(Box<hyprland::error::HyprError>),
 
     /// JSON serialization and deserialization errors.
     #[error("JSON error: {0}")]
@@ -24,6 +24,18 @@ pub enum AetherisError {
     /// Daemon configuration errors.
     #[error("Configuration error: {0}")]
     Config(String),
+}
+
+impl From<tokio_tungstenite::tungstenite::Error> for AetherisError {
+    fn from(err: tokio_tungstenite::tungstenite::Error) -> Self {
+        Self::WebSocket(Box::new(err))
+    }
+}
+
+impl From<hyprland::error::HyprError> for AetherisError {
+    fn from(err: hyprland::error::HyprError) -> Self {
+        Self::Hyprland(Box::new(err))
+    }
 }
 
 /// Convenience Result alias for Aetheris daemon operations.
