@@ -16,4 +16,5 @@ Cargo.lock
 # Agent tool symlinks
 .claude/
 agent/
+.superpowers/
 
