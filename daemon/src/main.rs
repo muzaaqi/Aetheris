@@ -36,14 +36,14 @@ async fn main() -> Result<()> {
     let server_config = config.clone();
     let server_event_tx = event_tx.clone();
     let server_shutdown = shutdown.clone();
-    let server_task = tokio::spawn(async move {
+    let mut server_task = tokio::spawn(async move {
         run_server(&server_config, server_event_tx, server_shutdown, addr_tx).await
     });
 
     // Spawn Hyprland listener task
     let hypr_event_tx = event_tx.clone();
     let hypr_shutdown = shutdown.clone();
-    let hypr_task = tokio::spawn(async move {
+    let mut hypr_task = tokio::spawn(async move {
         match run_hyprland_listener(hypr_event_tx, hypr_shutdown).await {
             Ok(()) => {
                 tracing::info!("Hyprland event listener exited cleanly");
@@ -62,21 +62,42 @@ async fn main() -> Result<()> {
         tracing::info!("Aetheris ready for connections at ws://{addr}");
     }
 
+    let mut server_err = None;
+
     // Wait for shutdown signal (Ctrl+C) or server termination
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {
             tracing::info!("Received Ctrl+C interrupt; initiating graceful shutdown");
             shutdown.cancel();
         }
-        res = server_task => {
-            tracing::info!("Server task finished: {:?}", res);
+        res = &mut server_task => {
             shutdown.cancel();
+            match res {
+                Ok(Ok(())) => {
+                    tracing::info!("Server task completed successfully");
+                }
+                Ok(Err(e)) => {
+                    tracing::error!("Server task failed: {e}");
+                    server_err = Some(e);
+                }
+                Err(join_err) => {
+                    tracing::error!("Server task panicked: {join_err}");
+                }
+            }
         }
     }
 
-    // Await Hyprland task with a short timeout for graceful drain
-    let _ = tokio::time::timeout(Duration::from_secs(2), hypr_task).await;
+    // Gracefully drain both tasks within a bounded timeout
+    let _ = tokio::time::timeout(Duration::from_secs(2), async {
+        let _ = tokio::join!(&mut server_task, &mut hypr_task);
+    })
+    .await;
 
     tracing::info!("Aetheris daemon stopped.");
+
+    if let Some(err) = server_err {
+        return Err(err);
+    }
+
     Ok(())
 }

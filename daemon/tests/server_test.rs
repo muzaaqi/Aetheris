@@ -262,3 +262,25 @@ async fn server_echoes_send_message_as_token_stream() {
     shutdown.cancel();
     server_handle.await.unwrap();
 }
+
+#[tokio::test]
+async fn server_fails_to_bind_when_port_in_use() {
+    let existing_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = existing_listener.local_addr().unwrap().port();
+
+    let config = DaemonConfig {
+        host: "127.0.0.1".into(),
+        port,
+        ..Default::default()
+    };
+    let (event_tx, _) = broadcast::channel(config.broadcast_capacity);
+    let shutdown = CancellationToken::new();
+    let (addr_tx, _addr_rx) = oneshot::channel();
+
+    let result = run_server(&config, event_tx, shutdown, addr_tx).await;
+    assert!(result.is_err());
+    assert!(matches!(
+        result.unwrap_err(),
+        aetheris_daemon::error::AetherisError::Io(_)
+    ));
+}
