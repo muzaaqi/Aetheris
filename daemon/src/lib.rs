@@ -9,3 +9,4 @@ pub mod error;
 pub mod hyprland;
 pub mod protocol;
 pub mod server;
+pub mod transcript;
