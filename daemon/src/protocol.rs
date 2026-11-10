@@ -24,6 +24,14 @@ pub enum ClientMessage {
     /// Update runtime daemon settings (agent backend, mode, thinking budget).
     #[serde(rename = "update_config")]
     UpdateConfig(UpdateConfigPayload),
+
+    /// Fuzzy search files in the active workspace repository.
+    #[serde(rename = "search_files")]
+    SearchFiles(SearchFilesPayload),
+
+    /// Request a list of all available global and workspace skills.
+    #[serde(rename = "list_skills")]
+    ListSkills,
 }
 
 /// Payload for `send_message` requests.
@@ -74,6 +82,17 @@ pub struct UpdateConfigPayload {
     pub thinking: String,
 }
 
+/// Payload for `search_files` requests.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchFilesPayload {
+    /// Search query string to match against project file paths.
+    pub query: String,
+
+    /// Maximum number of matching results to return (defaults to 20).
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
 // ============================================================================
 // Daemon -> Client Messages
 // ============================================================================
@@ -93,6 +112,68 @@ pub enum ServerMessage {
     /// Active Hyprland workspace and project context synchronization.
     #[serde(rename = "workspace_sync")]
     WorkspaceSync(WorkspaceSyncPayload),
+
+    /// Matching file paths returned for an `@file` fuzzy search query.
+    #[serde(rename = "file_results")]
+    FileResults(FileResultsPayload),
+
+    /// List of indexed global and workspace skills.
+    #[serde(rename = "skills_list")]
+    SkillsList(SkillsListPayload),
+}
+
+/// Payload for `file_results` responses.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileResultsPayload {
+    /// The original query string searched.
+    pub query: String,
+
+    /// List of matched relative file paths.
+    pub matches: Vec<FileMatch>,
+}
+
+/// Individual file match metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileMatch {
+    /// Relative or project-scoped file path.
+    pub path: String,
+
+    /// Whether this entry is a directory.
+    pub is_dir: bool,
+}
+
+/// Payload for `skills_list` responses.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SkillsListPayload {
+    /// Discovered skills.
+    pub skills: Vec<SkillInfo>,
+}
+
+/// Discovered skill information.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SkillInfo {
+    /// Canonical skill name.
+    pub name: String,
+
+    /// Brief description of the skill's capabilities.
+    pub description: String,
+
+    /// Scope of the skill (`user` or `workspace`).
+    pub scope: SkillScope,
+
+    /// Absolute filesystem path to the skill directory or `SKILL.md`.
+    pub path: String,
+}
+
+/// Scope origin of a skill.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SkillScope {
+    /// Global user skill (`~/.gemini/skills`, `~/.agents/skills`).
+    User,
+
+    /// Project workspace skill (`<workspace>/.agents/skills`).
+    Workspace,
 }
 
 /// Payload for `token_stream` notifications.

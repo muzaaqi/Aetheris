@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use aetheris_daemon::config::DaemonConfig;
@@ -6,7 +7,7 @@ use aetheris_daemon::protocol::{
 };
 use aetheris_daemon::server::run_server;
 use futures_util::{SinkExt, StreamExt};
-use tokio::sync::{broadcast, oneshot};
+use tokio::sync::{RwLock, broadcast, oneshot};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_util::sync::CancellationToken;
@@ -24,9 +25,15 @@ async fn server_accepts_websocket_connection() {
 
     let server_shutdown = shutdown.clone();
     let server_handle = tokio::spawn(async move {
-        run_server(&config, event_tx, server_shutdown, addr_tx)
-            .await
-            .unwrap();
+        run_server(
+            &config,
+            event_tx,
+            server_shutdown,
+            addr_tx,
+            Arc::new(RwLock::new(None)),
+        )
+        .await
+        .unwrap();
     });
 
     let addr = addr_rx.await.unwrap();
@@ -54,9 +61,15 @@ async fn server_broadcasts_event_to_connected_client() {
     let server_shutdown = shutdown.clone();
     let server_event_tx = event_tx.clone();
     let server_handle = tokio::spawn(async move {
-        run_server(&config, server_event_tx, server_shutdown, addr_tx)
-            .await
-            .unwrap();
+        run_server(
+            &config,
+            server_event_tx,
+            server_shutdown,
+            addr_tx,
+            Arc::new(RwLock::new(None)),
+        )
+        .await
+        .unwrap();
     });
 
     let addr = addr_rx.await.unwrap();
@@ -107,9 +120,15 @@ async fn server_handles_client_disconnect_gracefully() {
     let server_shutdown = shutdown.clone();
     let server_event_tx = event_tx.clone();
     let server_handle = tokio::spawn(async move {
-        run_server(&config, server_event_tx, server_shutdown, addr_tx)
-            .await
-            .unwrap();
+        run_server(
+            &config,
+            server_event_tx,
+            server_shutdown,
+            addr_tx,
+            Arc::new(RwLock::new(None)),
+        )
+        .await
+        .unwrap();
     });
 
     let addr = addr_rx.await.unwrap();
@@ -165,9 +184,15 @@ async fn server_handles_malformed_client_message() {
     let server_shutdown = shutdown.clone();
     let server_event_tx = event_tx.clone();
     let server_handle = tokio::spawn(async move {
-        run_server(&config, server_event_tx, server_shutdown, addr_tx)
-            .await
-            .unwrap();
+        run_server(
+            &config,
+            server_event_tx,
+            server_shutdown,
+            addr_tx,
+            Arc::new(RwLock::new(None)),
+        )
+        .await
+        .unwrap();
     });
 
     let addr = addr_rx.await.unwrap();
@@ -219,9 +244,15 @@ async fn server_echoes_send_message_as_token_stream() {
     let server_shutdown = shutdown.clone();
     let server_event_tx = event_tx.clone();
     let server_handle = tokio::spawn(async move {
-        run_server(&config, server_event_tx, server_shutdown, addr_tx)
-            .await
-            .unwrap();
+        run_server(
+            &config,
+            server_event_tx,
+            server_shutdown,
+            addr_tx,
+            Arc::new(RwLock::new(None)),
+        )
+        .await
+        .unwrap();
     });
 
     let addr = addr_rx.await.unwrap();
@@ -277,7 +308,14 @@ async fn server_fails_to_bind_when_port_in_use() {
     let shutdown = CancellationToken::new();
     let (addr_tx, _addr_rx) = oneshot::channel();
 
-    let result = run_server(&config, event_tx, shutdown, addr_tx).await;
+    let result = run_server(
+        &config,
+        event_tx,
+        shutdown,
+        addr_tx,
+        Arc::new(RwLock::new(None)),
+    )
+    .await;
     assert!(result.is_err());
     assert!(matches!(
         result.unwrap_err(),

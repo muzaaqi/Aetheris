@@ -1,11 +1,14 @@
 //! Aetheris Daemon
 //! OS-Level AI Agent HUD background service for Hyprland and Caelestia Shell.
 
+pub mod adapters;
 pub mod config;
+pub mod context;
 pub mod error;
 pub mod hyprland;
 pub mod protocol;
 pub mod server;
+pub mod transcript;
 
 use std::time::Duration;
 
@@ -31,20 +34,30 @@ async fn main() -> Result<()> {
     let (event_tx, _) = broadcast::channel(config.broadcast_capacity);
     let shutdown = CancellationToken::new();
     let (addr_tx, addr_rx) = oneshot::channel();
+    let active_workspace = std::sync::Arc::new(tokio::sync::RwLock::new(None));
 
     // Spawn server task
     let server_config = config.clone();
     let server_event_tx = event_tx.clone();
     let server_shutdown = shutdown.clone();
+    let server_active_ws = active_workspace.clone();
     let mut server_task = tokio::spawn(async move {
-        run_server(&server_config, server_event_tx, server_shutdown, addr_tx).await
+        run_server(
+            &server_config,
+            server_event_tx,
+            server_shutdown,
+            addr_tx,
+            server_active_ws,
+        )
+        .await
     });
 
     // Spawn Hyprland listener task
     let hypr_event_tx = event_tx.clone();
     let hypr_shutdown = shutdown.clone();
+    let hypr_active_ws = active_workspace.clone();
     let mut hypr_task = tokio::spawn(async move {
-        match run_hyprland_listener(hypr_event_tx, hypr_shutdown).await {
+        match run_hyprland_listener(hypr_event_tx, hypr_shutdown, hypr_active_ws).await {
             Ok(()) => {
                 tracing::info!("Hyprland event listener exited cleanly");
             }
@@ -55,6 +68,32 @@ async fn main() -> Result<()> {
                 );
             }
         }
+    });
+
+    // Initialize Transcript Watcher for Antigravity session streaming
+    let transcript_event_tx = event_tx.clone();
+    let transcript_shutdown = shutdown.clone();
+    let mut transcript_task = tokio::spawn(async move {
+        let mut watcher = crate::transcript::TranscriptWatcher::new(transcript_event_tx);
+        if let Some(home) = std::env::var_os("HOME") {
+            let brain_dir = std::path::PathBuf::from(home).join(".gemini/antigravity/brain");
+            if brain_dir.exists() {
+                if let Some(latest) = crate::transcript::find_latest_transcript(&brain_dir) {
+                    tracing::info!(
+                        "Monitoring active Antigravity session at {}",
+                        latest.display()
+                    );
+                    let _ = watcher.watch_file(latest).await;
+                } else {
+                    tracing::info!(
+                        "Monitoring Antigravity brain dir at {}",
+                        brain_dir.display()
+                    );
+                    let _ = watcher.watch_file(brain_dir).await;
+                }
+            }
+        }
+        transcript_shutdown.cancelled().await;
     });
 
     // Log bound address once available
@@ -99,9 +138,9 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Gracefully drain both tasks within a bounded timeout
+    // Gracefully drain all tasks within a bounded timeout
     let _ = tokio::time::timeout(Duration::from_secs(2), async {
-        let _ = tokio::join!(&mut server_task, &mut hypr_task);
+        let _ = tokio::join!(&mut server_task, &mut hypr_task, &mut transcript_task);
     })
     .await;
 

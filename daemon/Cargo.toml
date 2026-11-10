@@ -39,3 +39,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 [dev-dependencies]
 # WebSocket client for integration tests
 tokio-tungstenite = "0.26"
+tempfile = "3.17"
