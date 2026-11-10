@@ -5,5 +5,6 @@
 
 pub mod config;
 pub mod error;
+pub mod hyprland;
 pub mod protocol;
 pub mod server;
