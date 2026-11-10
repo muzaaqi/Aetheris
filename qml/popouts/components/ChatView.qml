@@ -8,21 +8,48 @@ Item {
 
     property alias messageModel: messageListView.model
     property bool isConnected: true
-    signal sendRequested(string text)
+    property var attachments: []
+    signal sendRequested(string text, var attachments)
 
     function submitPrompt() {
         if (!root.isConnected)
             return;
 
         const trimmed = inputField.text.trim();
-        if (trimmed.length > 0) {
-            root.sendRequested(trimmed);
+        if (trimmed.length > 0 || root.attachments.length > 0) {
+            root.sendRequested(trimmed, root.attachments.slice());
             inputField.text = "";
+            root.attachments = [];
         }
+    }
+
+    function addAttachment(path) {
+        if (!path)
+            return;
+        const list = root.attachments.slice();
+        if (!list.includes(path)) {
+            list.push(path);
+            root.attachments = list;
+        }
+    }
+
+    function removeAttachment(index) {
+        const list = root.attachments.slice();
+        list.splice(index, 1);
+        root.attachments = list;
     }
 
     function focusInput() {
         inputField.forceActiveFocus();
+    }
+
+    FileDropArea {
+        anchors.fill: parent
+        onFilesDropped: function(paths) {
+            for (let i = 0; i < paths.length; i++) {
+                root.addAttachment(paths[i]);
+            }
+        }
     }
 
     ColumnLayout {
@@ -103,6 +130,67 @@ Item {
             }
         }
 
+        // Attachment chips
+        RowLayout {
+            id: attachmentBar
+
+            visible: root.attachments.length > 0
+            spacing: Tokens.spacing.small
+            Layout.fillWidth: true
+
+            Repeater {
+                model: root.attachments
+
+                delegate: StyledRect {
+                    id: chipRect
+
+                    required property string modelData
+                    required property int index
+
+                    implicitHeight: 28
+                    implicitWidth: chipRow.implicitWidth + Tokens.padding.medium
+                    radius: Tokens.rounding.full
+                    color: Colours.palette.m3secondaryContainer
+
+                    RowLayout {
+                        id: chipRow
+                        anchors.centerIn: parent
+                        spacing: Tokens.spacing.extraSmall
+
+                        MaterialIcon {
+                            text: "attachment"
+                            color: Colours.palette.m3onSecondaryContainer
+                            fontStyle: Tokens.font.icon.builders.small.weight(Font.Normal).build()
+                        }
+
+                        StyledText {
+                            text: {
+                                const parts = chipRect.modelData.split("/");
+                                return parts[parts.length - 1] || chipRect.modelData;
+                            }
+                            color: Colours.palette.m3onSecondaryContainer
+                            font: Tokens.font.label.small
+                            elide: Text.ElideMiddle
+                            Layout.maximumWidth: 120
+                        }
+
+                        MaterialIcon {
+                            text: "close"
+                            color: Colours.palette.m3onSecondaryContainer
+                            fontStyle: Tokens.font.icon.builders.small.weight(Font.Bold).build()
+
+                            StateLayer {
+                                anchors.fill: parent
+                                radius: Tokens.rounding.full
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.removeAttachment(chipRect.index)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Input bar
         StyledRect {
             id: inputContainer
@@ -151,7 +239,7 @@ Item {
                 StyledRect {
                     id: sendButton
 
-                    readonly property bool canSend: root.isConnected && inputField.text.trim().length > 0
+                    readonly property bool canSend: root.isConnected && (inputField.text.trim().length > 0 || root.attachments.length > 0)
 
                     implicitWidth: 36
                     implicitHeight: 36

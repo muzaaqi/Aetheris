@@ -109,8 +109,8 @@ PanelWindow {
         }
     }
 
-    function dispatchPrompt(text) {
-        if (!text || ws.status !== WebSocket.Open)
+    function dispatchPrompt(text, attachments) {
+        if ((!text && (!attachments || attachments.length === 0)) || ws.status !== WebSocket.Open)
             return;
 
         root.isThinking = true;
@@ -121,7 +121,7 @@ PanelWindow {
             type: "send_message",
             payload: {
                 text: text,
-                attachments: [],
+                attachments: attachments || [],
                 quote: null
             }
         };
@@ -209,8 +209,8 @@ PanelWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
 
-                onSendRequested: function(text) {
-                    root.dispatchPrompt(text);
+                onSendRequested: function(text, attachments) {
+                    root.dispatchPrompt(text, attachments);
                 }
             }
         }
