@@ -10,6 +10,7 @@ ExecStart=%h/Projects/Aetheris/daemon/target/release/aetheris-daemon
 Restart=on-failure
 RestartSec=3s
 KillMode=mixed
+KillSignal=SIGINT
 TimeoutStopSec=5s
 Environment=RUST_LOG=info
 

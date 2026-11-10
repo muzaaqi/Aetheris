@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import QtWebSockets
 import Quickshell
 import Quickshell.Wayland
+import Quickshell.Hyprland
 import Caelestia.Config
 import qs.components
 import "components"
@@ -13,6 +14,7 @@ PanelWindow {
 
     property alias isConnected: root.wsConnected
     readonly property bool wsConnected: ws.status === WebSocket.Open
+    property bool isThinking: false
     property string currentWorkspacePath: ""
 
     implicitWidth: 480
@@ -36,6 +38,18 @@ PanelWindow {
         onActivated: root.visible = false
     }
 
+    HyprlandFocusGrab {
+        active: root.visible
+        windows: [root]
+        onCleared: root.visible = false
+    }
+
+    onVisibleChanged: {
+        if (root.visible) {
+            chatView.focusInput();
+        }
+    }
+
     ListModel {
         id: chatModel
 
@@ -49,18 +63,29 @@ PanelWindow {
         id: ws
 
         url: "ws://127.0.0.1:21420"
-        active: root.visible
+        active: true
+
+        onStatusChanged: {
+            if (ws.status !== WebSocket.Open) {
+                root.isThinking = false;
+            }
+        }
 
         onTextMessageReceived: function(message) {
             try {
                 const data = JSON.parse(message);
                 if (data.type === "token_stream") {
                     const payload = data.payload;
-                    if (chatModel.count > 0 && chatModel.get(chatModel.count - 1).sender === "assistant") {
-                        const last = chatModel.get(chatModel.count - 1);
-                        chatModel.setProperty(chatModel.count - 1, "text", last.text + payload.token);
-                    } else {
-                        chatModel.append({ sender: "assistant", text: payload.token });
+                    if (payload.done === true) {
+                        root.isThinking = false;
+                    }
+                    if (payload.token) {
+                        if (chatModel.count > 0 && chatModel.get(chatModel.count - 1).sender === "assistant") {
+                            const last = chatModel.get(chatModel.count - 1);
+                            chatModel.setProperty(chatModel.count - 1, "text", last.text + payload.token);
+                        } else {
+                            chatModel.append({ sender: "assistant", text: payload.token });
+                        }
                     }
                 } else if (data.type === "workspace_sync") {
                     root.currentWorkspacePath = data.payload.path;
@@ -71,10 +96,24 @@ PanelWindow {
         }
     }
 
+    Timer {
+        id: reconnectTimer
+
+        interval: 2000
+        repeat: true
+        running: ws.status !== WebSocket.Open
+
+        onTriggered: {
+            ws.active = false;
+            ws.active = true;
+        }
+    }
+
     function dispatchPrompt(text) {
         if (!text || ws.status !== WebSocket.Open)
             return;
 
+        root.isThinking = true;
         chatModel.append({ sender: "user", text: text });
         chatModel.append({ sender: "assistant", text: "" });
 
@@ -165,6 +204,7 @@ PanelWindow {
                 id: chatView
 
                 messageModel: chatModel
+                isConnected: root.wsConnected
 
                 Layout.fillWidth: true
                 Layout.fillHeight: true

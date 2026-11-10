@@ -26,6 +26,7 @@ ShellRoot {
         AgentHudButton {
             anchors.centerIn: parent
             isConnected: hudPopout.isConnected
+            isThinking: hudPopout.isThinking
             popoutOpen: hudPopout.visible
 
             onToggled: {

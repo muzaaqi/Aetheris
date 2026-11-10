@@ -7,14 +7,22 @@ Item {
     id: root
 
     property alias messageModel: messageListView.model
+    property bool isConnected: true
     signal sendRequested(string text)
 
     function submitPrompt() {
+        if (!root.isConnected)
+            return;
+
         const trimmed = inputField.text.trim();
         if (trimmed.length > 0) {
             root.sendRequested(trimmed);
             inputField.text = "";
         }
+    }
+
+    function focusInput() {
+        inputField.forceActiveFocus();
     }
 
     ColumnLayout {
@@ -44,6 +52,11 @@ Item {
                 });
             }
 
+            onContentHeightChanged: {
+                if (atYEnd)
+                    positionViewAtEnd();
+            }
+
             delegate: Component {
                 id: messageDelegate
 
@@ -61,7 +74,7 @@ Item {
                     StyledRect {
                         id: bubbleRect
 
-                        width: Math.min(messageText.implicitWidth + Tokens.padding.large * 2, delegateRoot.width * 0.85)
+                        width: Math.min(messageText.implicitWidth + Tokens.padding.medium * 2, delegateRoot.width * 0.85)
                         implicitHeight: messageText.implicitHeight + Tokens.padding.medium * 2
                         radius: Tokens.rounding.large
                         color: delegateRoot.isUser ? Colours.palette.m3primaryContainer : Colours.palette.m3surfaceContainerHigh
@@ -75,6 +88,7 @@ Item {
                             id: messageText
 
                             text: delegateRoot.text
+                            textFormat: delegateRoot.isUser ? Text.PlainText : Text.MarkdownText
                             color: delegateRoot.isUser ? Colours.palette.m3onPrimaryContainer : Colours.palette.m3onSurface
                             wrapMode: Text.Wrap
                             font: Tokens.font.body.medium
@@ -127,32 +141,34 @@ Item {
 
                     StyledText {
                         anchors.fill: parent
-                        text: "Ask Aetheris or dispatch task..."
+                        text: root.isConnected ? "Ask Aetheris or dispatch task..." : "Connecting to daemon..."
                         color: Colours.palette.m3onSurfaceVariant
                         font: parent.font
-                        visible: !inputField.text && !inputField.activeFocus
+                        visible: !inputField.text
                     }
                 }
 
                 StyledRect {
                     id: sendButton
 
+                    readonly property bool canSend: root.isConnected && inputField.text.trim().length > 0
+
                     implicitWidth: 36
                     implicitHeight: 36
                     radius: Tokens.rounding.full
-                    color: inputField.text.trim().length > 0 ? Colours.palette.m3primary : Colours.palette.m3surfaceContainerHighest
+                    color: canSend ? Colours.palette.m3primary : Colours.palette.m3surfaceContainerHighest
 
                     StateLayer {
                         anchors.fill: parent
                         radius: Tokens.rounding.full
-                        cursorShape: inputField.text.trim().length > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        cursorShape: sendButton.canSend ? Qt.PointingHandCursor : Qt.ArrowCursor
                         onClicked: root.submitPrompt()
                     }
 
                     MaterialIcon {
                         anchors.centerIn: parent
                         text: "arrow_upward"
-                        color: inputField.text.trim().length > 0 ? Colours.palette.m3onPrimary : Colours.palette.m3onSurfaceVariant
+                        color: sendButton.canSend ? Colours.palette.m3onPrimary : Colours.palette.m3onSurfaceVariant
                         fontStyle: Tokens.font.icon.builders.small.weight(Font.Bold).build()
                     }
                 }
