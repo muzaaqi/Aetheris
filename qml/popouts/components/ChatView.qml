@@ -7,22 +7,107 @@ Item {
     id: root
 
     property alias messageModel: messageListView.model
+    property alias fileMatches: mentionPopup.matches
     property bool isConnected: true
-    signal sendRequested(string text)
+    property var attachments: []
+    property bool mentionQueryActive: false
+    property int mentionStartIndex: -1
+
+    signal sendRequested(string text, var attachments)
+    signal fileSearchRequested(string query)
 
     function submitPrompt() {
         if (!root.isConnected)
             return;
 
         const trimmed = inputField.text.trim();
-        if (trimmed.length > 0) {
-            root.sendRequested(trimmed);
+        if (trimmed.length > 0 || root.attachments.length > 0) {
+            root.sendRequested(trimmed, root.attachments.slice());
             inputField.text = "";
+            root.attachments = [];
+            root.mentionQueryActive = false;
+            root.mentionStartIndex = -1;
         }
+    }
+
+    function addAttachment(path) {
+        if (!path)
+            return;
+        const list = root.attachments.slice();
+        if (!list.includes(path)) {
+            list.push(path);
+            root.attachments = list;
+        }
+    }
+
+    function removeAttachment(index) {
+        const list = root.attachments.slice();
+        list.splice(index, 1);
+        root.attachments = list;
+    }
+
+    function checkMention() {
+        const text = inputField.text;
+        const atIndex = text.lastIndexOf("@");
+        if (atIndex !== -1) {
+            const isAtStartOrWhitespace = atIndex === 0 || text.charAt(atIndex - 1) === " " || text.charAt(atIndex - 1) === "\n" || text.charAt(atIndex - 1) === "\t";
+            if (isAtStartOrWhitespace) {
+                const candidate = text.substring(atIndex + 1);
+                if (candidate.indexOf(" ") === -1 && candidate.indexOf("\n") === -1 && candidate.indexOf("\t") === -1) {
+                    root.mentionStartIndex = atIndex;
+                    root.mentionQueryActive = true;
+                    root.fileSearchRequested(candidate);
+                    return;
+                }
+            }
+        }
+        root.mentionQueryActive = false;
+        root.mentionStartIndex = -1;
+    }
+
+    function insertMention(path) {
+        if (root.mentionStartIndex >= 0) {
+            const text = inputField.text;
+            const prefix = text.substring(0, root.mentionStartIndex);
+            const newText = prefix + "@" + path + " ";
+            inputField.text = newText;
+            inputField.cursorPosition = newText.length;
+        }
+        root.mentionQueryActive = false;
+        root.mentionStartIndex = -1;
     }
 
     function focusInput() {
         inputField.forceActiveFocus();
+    }
+
+    FileDropArea {
+        anchors.fill: parent
+        onFilesDropped: function(paths) {
+            for (let i = 0; i < paths.length; i++) {
+                root.addAttachment(paths[i]);
+            }
+        }
+    }
+
+    FileMentionPopup {
+        id: mentionPopup
+
+        z: 10
+        anchors {
+            bottom: mainLayout.bottom
+            bottomMargin: inputContainer.height + Tokens.spacing.small
+            left: mainLayout.left
+        }
+        width: Math.min(360, mainLayout.width)
+        visible: Boolean(mentionPopup.matches && mentionPopup.matches.length > 0 && root.mentionQueryActive)
+
+        onFileSelected: function(path) {
+            root.insertMention(path);
+        }
+        onDismissed: {
+            root.mentionQueryActive = false;
+        }
     }
 
     ColumnLayout {
@@ -70,7 +155,6 @@ Item {
 
                     width: messageListView.width
                     implicitHeight: bubbleRect.implicitHeight + Tokens.spacing.extraSmall
-
                     StyledRect {
                         id: bubbleRect
 
@@ -96,6 +180,67 @@ Item {
                             anchors {
                                 fill: parent
                                 margins: Tokens.padding.medium
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Attachment chips
+        RowLayout {
+            id: attachmentBar
+
+            visible: root.attachments.length > 0
+            spacing: Tokens.spacing.small
+            Layout.fillWidth: true
+
+            Repeater {
+                model: root.attachments
+
+                delegate: StyledRect {
+                    id: chipRect
+
+                    required property string modelData
+                    required property int index
+
+                    implicitHeight: 28
+                    implicitWidth: chipRow.implicitWidth + Tokens.padding.medium
+                    radius: Tokens.rounding.full
+                    color: Colours.palette.m3secondaryContainer
+
+                    RowLayout {
+                        id: chipRow
+                        anchors.centerIn: parent
+                        spacing: Tokens.spacing.extraSmall
+
+                        MaterialIcon {
+                            text: "attachment"
+                            color: Colours.palette.m3onSecondaryContainer
+                            fontStyle: Tokens.font.icon.builders.small.weight(Font.Normal).build()
+                        }
+
+                        StyledText {
+                            text: {
+                                const clean = chipRect.modelData.replace(/\/+$/, "");
+                                return clean.substring(clean.lastIndexOf("/") + 1) || chipRect.modelData;
+                            }
+                            color: Colours.palette.m3onSecondaryContainer
+                            font: Tokens.font.label.small
+                            elide: Text.ElideMiddle
+                            Layout.maximumWidth: 120
+                        }
+
+                        MaterialIcon {
+                            text: "close"
+                            color: Colours.palette.m3onSecondaryContainer
+                            fontStyle: Tokens.font.icon.builders.small.weight(Font.Bold).build()
+
+                            StateLayer {
+                                anchors.fill: parent
+                                radius: Tokens.rounding.full
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.removeAttachment(chipRect.index)
                             }
                         }
                     }
@@ -132,8 +277,37 @@ Item {
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignVCenter
 
-                    Keys.onReturnPressed: function(event) {
-                        if (!(event.modifiers & Qt.ShiftModifier)) {
+                    onTextChanged: {
+                        root.checkMention();
+                    }
+
+                    Keys.onPressed: function(event) {
+                        if (mentionPopup.visible) {
+                            if (event.key === Qt.Key_Down) {
+                                mentionPopup.selectNext();
+                                event.accepted = true;
+                                return;
+                            }
+                            if (event.key === Qt.Key_Up) {
+                                mentionPopup.selectPrevious();
+                                event.accepted = true;
+                                return;
+                            }
+                            if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !(event.modifiers & Qt.ShiftModifier)) {
+                                if (mentionPopup.matches && mentionPopup.matches.length > 0) {
+                                    mentionPopup.triggerSelection();
+                                    event.accepted = true;
+                                    return;
+                                }
+                            }
+                            if (event.key === Qt.Key_Escape) {
+                                root.mentionQueryActive = false;
+                                event.accepted = true;
+                                return;
+                            }
+                        }
+
+                        if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !(event.modifiers & Qt.ShiftModifier)) {
                             root.submitPrompt();
                             event.accepted = true;
                         }
@@ -151,7 +325,7 @@ Item {
                 StyledRect {
                     id: sendButton
 
-                    readonly property bool canSend: root.isConnected && inputField.text.trim().length > 0
+                    readonly property bool canSend: root.isConnected && (inputField.text.trim().length > 0 || root.attachments.length > 0)
 
                     implicitWidth: 36
                     implicitHeight: 36
