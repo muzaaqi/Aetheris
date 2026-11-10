@@ -1,0 +1,17 @@
+[Unit]
+Description=Aetheris AI Agent Orchestration HUD Daemon
+Documentation=https://github.com/muzaaqi/Aetheris
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/Projects/Aetheris/daemon/target/release/aetheris-daemon
+Restart=on-failure
+RestartSec=3s
+KillMode=mixed
+TimeoutStopSec=5s
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=graphical-session.target
