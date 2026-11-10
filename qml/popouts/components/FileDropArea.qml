@@ -11,7 +11,6 @@ DropArea {
         anchors.fill: parent
         visible: root.containsDrag
         color: Colours.tPalette.m3primary
-        opacity: 0.15
         radius: Tokens.rounding.large
         border.color: Colours.palette.m3primary
         border.width: 2
@@ -31,12 +30,12 @@ DropArea {
 
         const paths = [];
         for (let i = 0; i < drop.urls.length; i++) {
-            let u = drop.urls[i].toString();
+            const u = drop.urls[i].toString();
             if (u.startsWith("file://")) {
-                u = u.substring(7);
-            }
-            if (u.length > 0) {
-                paths.push(decodeURIComponent(u));
+                const decoded = decodeURIComponent(u.substring(7));
+                if (decoded.length > 0) {
+                    paths.push(decoded);
+                }
             }
         }
 

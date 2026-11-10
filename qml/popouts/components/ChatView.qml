@@ -50,12 +50,15 @@ Item {
         const text = inputField.text;
         const atIndex = text.lastIndexOf("@");
         if (atIndex !== -1) {
-            const candidate = text.substring(atIndex + 1);
-            if (candidate.indexOf(" ") === -1 && candidate.indexOf("\n") === -1 && candidate.indexOf("\t") === -1) {
-                root.mentionStartIndex = atIndex;
-                root.mentionQueryActive = true;
-                root.fileSearchRequested(candidate);
-                return;
+            const isAtStartOrWhitespace = atIndex === 0 || text.charAt(atIndex - 1) === " " || text.charAt(atIndex - 1) === "\n" || text.charAt(atIndex - 1) === "\t";
+            if (isAtStartOrWhitespace) {
+                const candidate = text.substring(atIndex + 1);
+                if (candidate.indexOf(" ") === -1 && candidate.indexOf("\n") === -1 && candidate.indexOf("\t") === -1) {
+                    root.mentionStartIndex = atIndex;
+                    root.mentionQueryActive = true;
+                    root.fileSearchRequested(candidate);
+                    return;
+                }
             }
         }
         root.mentionQueryActive = false;
@@ -92,11 +95,11 @@ Item {
 
         z: 10
         anchors {
-            bottom: inputContainer.top
-            bottomMargin: Tokens.spacing.small
-            left: inputContainer.left
+            bottom: mainLayout.bottom
+            bottomMargin: inputContainer.height + Tokens.spacing.small
+            left: mainLayout.left
         }
-        width: Math.min(360, inputContainer.width)
+        width: Math.min(360, mainLayout.width)
         visible: Boolean(mentionPopup.matches && mentionPopup.matches.length > 0 && root.mentionQueryActive)
 
         onFileSelected: function(path) {
@@ -219,8 +222,8 @@ Item {
 
                         StyledText {
                             text: {
-                                const parts = chipRect.modelData.split("/");
-                                return parts[parts.length - 1] || chipRect.modelData;
+                                const clean = chipRect.modelData.replace(/\/+$/, "");
+                                return clean.substring(clean.lastIndexOf("/") + 1) || chipRect.modelData;
                             }
                             color: Colours.palette.m3onSecondaryContainer
                             font: Tokens.font.label.small

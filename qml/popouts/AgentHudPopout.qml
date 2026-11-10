@@ -234,8 +234,8 @@ PanelWindow {
                                     text: {
                                         if (!root.currentWorkspacePath)
                                             return "";
-                                        const parts = root.currentWorkspacePath.split("/");
-                                        return parts[parts.length - 1] || root.currentWorkspacePath;
+                                        const clean = root.currentWorkspacePath.replace(/\/+$/, "");
+                                        return clean.substring(clean.lastIndexOf("/") + 1) || root.currentWorkspacePath;
                                     }
                                     color: Colours.palette.m3onSurfaceVariant
                                     font: Tokens.font.label.small

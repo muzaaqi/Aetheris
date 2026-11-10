@@ -19,6 +19,10 @@ StyledRect {
     border.width: 1
     clip: true
 
+    onMatchesChanged: {
+        root.selectedIndex = 0;
+    }
+
     function selectNext() {
         if (root.matches.length > 0) {
             root.selectedIndex = (root.selectedIndex + 1) % root.matches.length;
@@ -46,7 +50,7 @@ StyledRect {
             fill: parent
             margins: Tokens.padding.small
         }
-        spacing: 2
+        spacing: Tokens.spacing.extraSmall
         model: root.matches
         boundsBehavior: Flickable.StopAtBounds
 
