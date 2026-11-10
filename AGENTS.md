@@ -72,6 +72,15 @@
 ├── systemd/
 │   └── aetheris.service       # Systemd user service unit definition
 │
+├── .agents/
+│   └── skills/                # Project-scoped agent skills
+│       ├── rust-best-practices/ # Apollo GraphQL Rust quality & ownership patterns
+│       ├── rust-async-patterns/ # Tokio async concurrency, channels, & cancellation
+│       ├── rust-review/       # Trail of Bits security & unsafe code audit guidelines
+│       ├── rust-testing/      # Comprehensive Rust unit & integration test patterns
+│       ├── qt-qml/            # The Qt Company R&D QML & QtQuick best practices
+│       └── qt-qml-review/     # The Qt Company R&D QML code review & performance linting
+│
 ├── AGENTS.md                  # This file (Engineering conventions & rules)
 ├── PRODUCT.md                 # Product requirements, user stories, & milestone criteria
 ├── DESIGN.md                  # Complete architectural specification & WebSocket protocol
@@ -131,23 +140,45 @@ qs -c caelestia kill && caelestia shell -d
 
 ---
 
-## 5. Critical Architecture Rules
+## 5. Agent Skills & Engineering Standards
+
+The project maintains vetted agent skills located in [`.agents/skills/`](file:///home/muzaaqi/Projects/Aetheris/.agents/skills). All agents must strictly read and adhere to the relevant skill instructions prior to implementing or auditing code in their respective domains:
+
+| Domain | Skill | Source & Version | Mandate & Usage |
+|---|---|---|---|
+| **Rust Architecture & Quality** | [`rust-best-practices`](file:///home/muzaaqi/Projects/Aetheris/.agents/skills/rust-best-practices/SKILL.md) | Apollo GraphQL (22.7K installs) | **Mandatory for all Rust code.** Enforces ownership and borrowing idioms, minimal cloning, zero-cost abstractions, and error propagation (`thiserror`). |
+| **Tokio Async & Concurrency** | [`rust-async-patterns`](file:///home/muzaaqi/Projects/Aetheris/.agents/skills/rust-async-patterns/SKILL.md) | wshobson / Vetted Agents (21.9K installs) | **Mandatory for `daemon/src/main.rs`, `protocol.rs`, and WebSocket loops.** Governs non-blocking actor loops, broadcast/mpsc channel management, and cancellation safety without deadlocks. |
+| **Security & Systems Audit** | [`rust-review`](file:///home/muzaaqi/Projects/Aetheris/.agents/skills/rust-review/SKILL.md) | Trail of Bits (2.4K installs) | **Mandatory before committing daemon changes.** Audits unsafe blocks, memory safety boundaries, IPC socket input sanitization, and prevents privilege or path-traversal vulnerabilities. |
+| **Test-Driven Verification** | [`rust-testing`](file:///home/muzaaqi/Projects/Aetheris/.agents/skills/rust-testing/SKILL.md) | Engineering Craft Collection (13.6K installs) | **Mandatory for test development.** Sets standards for unit tests, mocking external Hyprland/inotify dependencies, property testing, and regression test suites. |
+| **Caelestia QML Components** | [`qt-qml`](file:///home/muzaaqi/Projects/Aetheris/.agents/skills/qt-qml/SKILL.md) | The Qt Company R&D (1.2K installs) | **Mandatory for all files in `qml/`.** Establishes declarative QtQuick patterns, property binding syntax, item positioning, and seamless integration with Caelestia Shell. |
+| **QML Review & Performance** | [`qt-qml-review`](file:///home/muzaaqi/Projects/Aetheris/.agents/skills/qt-qml-review/SKILL.md) | The Qt Company R&D (1.0K installs) | **Mandatory before landing UI changes.** Audits QML for binding loops, redundant layout recalculations, unanchored items, and glassmorphism render lag. |
+
+### How Agents Must Apply These Skills
+1. **Prior to Feature Implementation:** Read the domain's corresponding `SKILL.md` (e.g., read `rust-async-patterns` before implementing the WebSocket server or channel routers).
+2. **Prior to Submitting Changes:** Run through the review checklists in `rust-review` and `qt-qml-review` to verify that no anti-patterns, memory leaks, or unhandled errors exist.
+3. **During Code Review:** Critique proposed pull requests and diffs directly against the rules codified in these skills.
+
+---
+
+## 6. Critical Architecture Rules
 
 These rules are strictly enforced for all agents contributing code:
 
-1. **Rule 1 — Zero Async Blocking:**
+1. **Rule 1 — Zero Async Blocking (See [`rust-async-patterns`](file:///home/muzaaqi/Projects/Aetheris/.agents/skills/rust-async-patterns/SKILL.md)):**
    Never execute blocking filesystem operations (`std::fs`), blocking process calls, or synchronous sleep on tokio threads. Always use `tokio::fs`, `tokio::process::Command`, and `tokio::time::sleep`.
-2. **Rule 2 — Memory Footprint Discipline (<15 MB RAM):**
+2. **Rule 2 — Memory Footprint Discipline (<15 MB RAM) (See [`rust-best-practices`](file:///home/muzaaqi/Projects/Aetheris/.agents/skills/rust-best-practices/SKILL.md)):**
    The daemon must remain lightweight and leak-free. Avoid buffering unbounded file contents into memory. Stream large files, diffs, and transcripts incrementally.
 3. **Rule 3 — Event-Driven Hyprland Sync (Zero Polling):**
    Never poll `hyprctl` in an infinite loop. Use the `hyprland` crate's async event listener on `/tmp/hypr/.../.socket2.sock` to react to `activeworkspace` and `activewindow` events instantly.
-4. **Rule 4 — Human-in-the-Loop Safety Interception:**
+4. **Rule 4 — Human-in-the-Loop Safety Interception (See [`rust-review`](file:///home/muzaaqi/Projects/Aetheris/.agents/skills/rust-review/SKILL.md)):**
    When running in `Safe Mode`, any tool call that performs state mutations (file modifications, shell commands, web requests) must emit a `tool_call_request` to the frontend and block execution until explicit `tool_approval` is received.
-5. **Rule 5 — Idiomatic Rust Error Handling:**
-   Never call `.unwrap()` or `.expect()` in non-test production code. Propagate errors via `Result<T, E>` using `thiserror` or custom error enums.
-6. **Rule 6 — Strict Caelestia Design Harmony:**
+5. **Rule 5 — Idiomatic Rust Error Handling & Safety (See [`rust-best-practices`](file:///home/muzaaqi/Projects/Aetheris/.agents/skills/rust-best-practices/SKILL.md) & [`rust-review`](file:///home/muzaaqi/Projects/Aetheris/.agents/skills/rust-review/SKILL.md)):**
+   Never call `.unwrap()` or `.expect()` in non-test production code. Propagate errors via `Result<T, E>` using `thiserror` or custom error enums. Zero unvetted `unsafe` blocks.
+6. **Rule 6 — Strict Caelestia Design Harmony (See [`qt-qml`](file:///home/muzaaqi/Projects/Aetheris/.agents/skills/qt-qml/SKILL.md) & [`qt-qml-review`](file:///home/muzaaqi/Projects/Aetheris/.agents/skills/qt-qml-review/SKILL.md)):**
    Never hardcode arbitrary hex colors, fonts, or non-standard border radiuses in QML components. Always bind to `scheme.current`, `Colours.qml`, and `ScreenState.qml`.
 7. **Rule 7 — Universal Platform Abstraction:**
    Frontend QML must never contain vendor-specific logic for Antigravity vs Claude Code vs OpenAI. All normalization (mode flags, thinking budgets, skill formatting) belongs inside `daemon/src/adapters/`.
-8. **Rule 8 — Zero AI Attribution Standard:**
+8. **Rule 8 — TDD & Test Verification (See [`rust-testing`](file:///home/muzaaqi/Projects/Aetheris/.agents/skills/rust-testing/SKILL.md)):**
+   Every new protocol handler, adapter parser, or context indexer must be accompanied by unit or integration tests in `daemon/tests/` before implementation is considered complete.
+9. **Rule 9 — Zero AI Attribution Standard:**
    Do not add co-authorship comments, AI disclaimers, or "Generated by AI" footers in commit messages or source files. Maintain clean, human-written craftsmanship throughout.
