@@ -62,14 +62,15 @@ pub async fn run_hyprland_listener(
             tracing::info!("Hyprland workspace changed: id={ws_id}");
 
             // Try to resolve focused client on the new workspace
-            let (path_str, branch) = if let Ok(Some(client)) = Client::get_active_async().await
+            let (path_str, branch, active_cwd) = if let Ok(Some(client)) =
+                Client::get_active_async().await
                 && client.pid > 0
                 && let Some(cwd) = resolve_window_cwd(client.pid as u32)
             {
                 let path_str = cwd.to_string_lossy().into_owned();
                 let branch = detect_git_branch(&cwd);
-                *ws_active_ws.write().await = Some(cwd);
-                (path_str, branch)
+                *ws_active_ws.write().await = Some(cwd.clone());
+                (path_str, branch, Some(cwd))
             } else {
                 let ws_guard = ws_active_ws.read().await;
                 let path_str = ws_guard
@@ -77,15 +78,18 @@ pub async fn run_hyprland_listener(
                     .map(|p| p.to_string_lossy().into_owned())
                     .unwrap_or_else(|| data.name.to_string());
                 let branch = ws_guard.as_ref().and_then(|p| detect_git_branch(p));
-                (path_str, branch)
+                let active_cwd = ws_guard.clone();
+                (path_str, branch, active_cwd)
             };
+
+            let mcp_servers = crate::mcp::scan_mcp_servers(active_cwd.as_deref()).await;
 
             let sync_msg = ServerMessage::WorkspaceSync(WorkspaceSyncPayload {
                 workspace_id: ws_id,
                 path: path_str,
                 git_branch: branch,
                 skills_count: 0,
-                mcp_servers: vec![],
+                mcp_servers,
             });
 
             if let Err(e) = ws_tx.send(sync_msg) {
@@ -122,12 +126,14 @@ pub async fn run_hyprland_listener(
                         // Update shared active workspace for RPC search operations
                         *win_active_ws.write().await = Some(cwd.clone());
 
+                        let mcp_servers = crate::mcp::scan_mcp_servers(Some(&cwd)).await;
+
                         let sync_msg = ServerMessage::WorkspaceSync(WorkspaceSyncPayload {
                             workspace_id: client.workspace.id,
                             path: path_str,
                             git_branch: branch,
                             skills_count: 0,
-                            mcp_servers: vec![],
+                            mcp_servers,
                         });
 
                         if let Err(e) = win_tx.send(sync_msg) {
