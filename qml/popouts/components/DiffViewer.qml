@@ -10,32 +10,31 @@ StyledRect {
     property string fileLabel: "Diff"
     property bool expanded: true
 
-    readonly property var diffLines: {
+    readonly property var allDiffLines: {
         if (!root.diffText) return [];
-        let text = root.diffText;
-        if (text.endsWith("\n")) {
-            text = text.slice(0, -1);
-        }
-        return text.split("\n");
+        return root.diffText.replace(/\r?\n+$/, "").split(/\r?\n/);
     }
+    readonly property int maxDisplayLines: 100
+    readonly property bool isTruncated: allDiffLines.length > maxDisplayLines
+    readonly property var diffLines: isTruncated ? allDiffLines.slice(0, maxDisplayLines) : allDiffLines
 
     readonly property int addedCount: {
         let count = 0;
-        for (let i = 0; i < diffLines.length; i++) {
-            if (diffLines[i].startsWith("+") && !diffLines[i].startsWith("+++")) count++;
+        for (let i = 0; i < allDiffLines.length; i++) {
+            if (allDiffLines[i].startsWith("+") && !allDiffLines[i].startsWith("+++")) count++;
         }
         return count;
     }
 
     readonly property int deletedCount: {
         let count = 0;
-        for (let i = 0; i < diffLines.length; i++) {
-            if (diffLines[i].startsWith("-") && !diffLines[i].startsWith("---")) count++;
+        for (let i = 0; i < allDiffLines.length; i++) {
+            if (allDiffLines[i].startsWith("-") && !allDiffLines[i].startsWith("---")) count++;
         }
         return count;
     }
 
-    implicitWidth: parent ? parent.width : 380
+    implicitWidth: 380
     implicitHeight: mainCol.implicitHeight
     radius: Tokens.rounding.medium
     color: Colours.palette.m3surfaceContainerLowest
@@ -148,14 +147,28 @@ StyledRect {
                             rightMargin: Tokens.padding.small
                         }
                         text: lineRect.modelData
-                        font: Tokens.font.body.small
-                        font.family: "monospace"
+                        font: Tokens.font.mono.small
                         elide: Text.ElideRight
                         color: lineRect.isAddition ? Colours.palette.m3onTertiaryContainer
                              : lineRect.isDeletion ? Colours.palette.m3onErrorContainer
                              : lineRect.isHunkHeader ? Colours.palette.m3primary
                              : Colours.palette.m3onSurfaceVariant
                     }
+                }
+            }
+
+            // Truncation Indicator
+            StyledRect {
+                visible: root.isTruncated
+                Layout.fillWidth: true
+                implicitHeight: 24
+                color: Colours.palette.m3surfaceContainerHigh
+
+                StyledText {
+                    anchors.centerIn: parent
+                    text: "... [" + (root.allDiffLines.length - root.maxDisplayLines) + " more lines collapsed]"
+                    font: Tokens.font.label.small
+                    color: Colours.palette.m3outline
                 }
             }
         }

@@ -76,6 +76,8 @@ PanelWindow {
         onStatusChanged: {
             if (ws.status !== WebSocket.Open) {
                 root.isThinking = false;
+            } else if (ws.status === WebSocket.Open) {
+                root.dispatchConfigUpdate(modeBar.currentMode, modeBar.thinkingBudget);
             }
         }
 
@@ -414,6 +416,13 @@ PanelWindow {
                 }
 
                 onToolApprovalRequested: function(toolCallId, approved) {
+                    for (let i = 0; i < chatModel.count; i++) {
+                        const item = chatModel.get(i);
+                        if (item.toolCallId === toolCallId) {
+                            chatModel.setProperty(i, "status", approved ? "approved" : "rejected");
+                            break;
+                        }
+                    }
                     if (ws.status === WebSocket.Open) {
                         ws.sendTextMessage(JSON.stringify({
                             type: "tool_approval",

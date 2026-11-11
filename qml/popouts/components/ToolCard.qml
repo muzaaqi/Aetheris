@@ -12,12 +12,13 @@ StyledRect {
     property bool requiresApproval: true
     property string status: "pending"
     property string diffText: ""
+    property bool actionTaken: false
 
     signal approvalDecided(string toolCallId, bool approved)
 
-    readonly property bool isPending: root.status === "pending" && root.requiresApproval
+    readonly property bool isPending: root.status === "pending" && root.requiresApproval && !root.actionTaken
 
-    implicitWidth: parent ? parent.width : 420
+    implicitWidth: 420
     implicitHeight: mainCol.implicitHeight + Tokens.padding.medium * 2
     radius: Tokens.rounding.large
     color: Colours.palette.m3surfaceContainerHigh
@@ -113,8 +114,7 @@ StyledRect {
                     margins: Tokens.padding.small
                 }
                 text: root.toolArgs
-                font: Tokens.font.body.small
-                font.family: "monospace"
+                font: Tokens.font.mono.small
                 color: Colours.palette.m3onSurfaceVariant
                 wrapMode: Text.WrapAnywhere
             }
@@ -167,7 +167,7 @@ StyledRect {
                     radius: Tokens.rounding.full
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
-                        root.status = "rejected";
+                        root.actionTaken = true;
                         root.approvalDecided(root.toolCallId, false);
                     }
                 }
@@ -204,7 +204,7 @@ StyledRect {
                     radius: Tokens.rounding.full
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
-                        root.status = "approved";
+                        root.actionTaken = true;
                         root.approvalDecided(root.toolCallId, true);
                     }
                 }
