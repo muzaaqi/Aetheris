@@ -51,7 +51,7 @@
   - `function open(): void`
   - `function close(): void`
 
-- [ ] **Step 1: Implement `qml/popouts/components/ContextMenuPopup.qml`**
+- [x] **Step 1: Implement `qml/popouts/components/ContextMenuPopup.qml`**
 
 Create the floating context menu:
 - Styled with `Colours.palette.m3surfaceContainerHigh`, `Tokens.rounding.large`, border `Colours.palette.m3outlineVariant`.
@@ -181,12 +181,12 @@ StyledRect {
 }
 ```
 
-- [ ] **Step 2: Run qmllint on `ContextMenuPopup.qml`**
+- [x] **Step 2: Run qmllint on `ContextMenuPopup.qml`**
 
 Run: `qmllint -I ~/.config/quickshell/caelestia -I qml -I qml/popouts qml/popouts/components/ContextMenuPopup.qml`
 Expected: PASS with 0 warnings/errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add qml/popouts/components/ContextMenuPopup.qml
@@ -209,7 +209,7 @@ git commit -m "feat(qml): add ContextMenuPopup component for Add Context action"
   - `function toggle(): void`
   - `function close(): void`
 
-- [ ] **Step 1: Implement `qml/popouts/components/ModelSelectorPopup.qml`**
+- [x] **Step 1: Implement `qml/popouts/components/ModelSelectorPopup.qml`**
 
 Create the model/platform selector dropdown:
 - Supports switching between backend agents:
@@ -337,12 +337,12 @@ StyledRect {
 }
 ```
 
-- [ ] **Step 2: Run qmllint on `ModelSelectorPopup.qml`**
+- [x] **Step 2: Run qmllint on `ModelSelectorPopup.qml`**
 
 Run: `qmllint -I ~/.config/quickshell/caelestia -I qml -I qml/popouts qml/popouts/components/ModelSelectorPopup.qml`
 Expected: PASS with 0 warnings/errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add qml/popouts/components/ModelSelectorPopup.qml
@@ -365,7 +365,7 @@ git commit -m "feat(qml): add ModelSelectorPopup component for agent backend sel
   - `function toggle(): void`
   - `function close(): void`
 
-- [ ] **Step 1: Implement `qml/popouts/components/ModeSelectorPopup.qml`**
+- [x] **Step 1: Implement `qml/popouts/components/ModeSelectorPopup.qml`**
 
 Create the compact execution mode selector popup:
 - Displays 3 modes:
@@ -492,12 +492,12 @@ StyledRect {
 }
 ```
 
-- [ ] **Step 2: Run qmllint on `ModeSelectorPopup.qml`**
+- [x] **Step 2: Run qmllint on `ModeSelectorPopup.qml`**
 
 Run: `qmllint -I ~/.config/quickshell/caelestia -I qml -I qml/popouts qml/popouts/components/ModeSelectorPopup.qml`
 Expected: PASS with 0 warnings/errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add qml/popouts/components/ModeSelectorPopup.qml
@@ -524,7 +524,7 @@ git commit -m "feat(qml): add ModeSelectorPopup component for execution mode sel
   - `ModelSelectorPopup.qml`
   - `ModeSelectorPopup.qml`
 
-- [ ] **Step 1: Redesign bottom input container in `ChatView.qml`**
+- [x] **Step 1: Redesign bottom input container in `ChatView.qml`**
 
 1. Replace old separate text container with unified rounded pill container:
    - Outer `StyledRect` (`radius: Tokens.rounding.extraLarge`, background `Colours.palette.m3surfaceContainerHigh`, border `Colours.palette.m3outlineVariant`).
@@ -543,12 +543,12 @@ git commit -m "feat(qml): add ModeSelectorPopup component for execution mode sel
 3. Mutual exclusion: opening one popup closes the other two.
 4. Clicking `@ Mentions` inserts `@` into the text box and calls `checkMention()`.
 
-- [ ] **Step 2: Run qmllint on `ChatView.qml`**
+- [x] **Step 2: Run qmllint on `ChatView.qml`**
 
 Run: `qmllint -I ~/.config/quickshell/caelestia -I qml -I qml/popouts qml/popouts/components/ChatView.qml`
 Expected: PASS with 0 warnings/errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add qml/popouts/components/ChatView.qml
@@ -566,7 +566,7 @@ git commit -m "feat(qml): redesign ChatView bottom input bar with integrated too
 - Consumes: `ChatView`'s `modeSelected`, `platformSelected`, `filesRequested`.
 - Produces: `dispatchConfigUpdate(mode, thinking, platform)` over WebSocket.
 
-- [ ] **Step 1: Remove `ModeBar` from top and wire new `ChatView` signals**
+- [x] **Step 1: Remove `ModeBar` from top and wire new `ChatView` signals**
 
 1. Remove `ModeBar` from between the context header and `ChatView` in `AgentHudPopout.qml`.
 2. Update `dispatchConfigUpdate` to accept `platform`:
@@ -590,12 +590,12 @@ git commit -m "feat(qml): redesign ChatView bottom input bar with integrated too
    - `onFilesRequested: function() { /* invoke file selection / dialog */ }`
 4. On WebSocket reconnect, sync `chatView.currentMode` and `chatView.currentPlatform`.
 
-- [ ] **Step 2: Run qmllint on `AgentHudPopout.qml`**
+- [x] **Step 2: Run qmllint on `AgentHudPopout.qml`**
 
 Run: `qmllint -I ~/.config/quickshell/caelestia -I qml -I qml/popouts qml/popouts/AgentHudPopout.qml`
 Expected: PASS with 0 warnings/errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add qml/popouts/AgentHudPopout.qml
@@ -610,12 +610,12 @@ git commit -m "feat(qml): remove top ModeBar and connect unified input bar contr
 - Modify: `scripts/preview.sh` (ensure preview loads new components cleanly)
 - Verify: Full QML and Rust workspace
 
-- [ ] **Step 1: Verify standalone preview execution**
+- [x] **Step 1: Verify standalone preview execution**
 
 Run: `timeout 5 ./scripts/preview.sh`
 Expected: Launches cleanly with `INFO: Configuration Loaded` and 0 errors.
 
-- [ ] **Step 2: Run complete project quality checks**
+- [x] **Step 2: Run complete project quality checks**
 
 ```bash
 qmllint -I ~/.config/quickshell/caelestia -I qml -I qml/popouts qml/AgentHudButton.qml qml/popouts/AgentHudPopout.qml qml/popouts/components/ChatView.qml qml/popouts/components/FileDropArea.qml qml/popouts/components/FileMentionPopup.qml qml/popouts/components/ContextMenuPopup.qml qml/popouts/components/ModelSelectorPopup.qml qml/popouts/components/ModeSelectorPopup.qml qml/popouts/components/DiffViewer.qml qml/popouts/components/ToolCard.qml qml/shell.qml
@@ -626,7 +626,7 @@ cargo fmt --check --manifest-path daemon/Cargo.toml
 ```
 Expected: All linters and tests exit with code 0.
 
-- [ ] **Step 3: Commit any preview script adjustments**
+- [x] **Step 3: Commit any preview script adjustments**
 
 ```bash
 git add scripts/preview.sh
