@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Caelestia.Config
 import qs.components
+import qs.services
 
 Item {
     id: root
@@ -12,10 +13,30 @@ Item {
     property var attachments: []
     property bool mentionQueryActive: false
     property int mentionStartIndex: -1
+    property string currentPlatform: "antigravity"
+    property string currentMode: "safe"
+    readonly property bool hasActivePopup: contextPopup.isOpen || modelPopup.isOpen || modePopup.isOpen || mentionPopup.visible
 
     signal sendRequested(string text, var attachments)
     signal fileSearchRequested(string query)
     signal toolApprovalRequested(string toolCallId, bool approved)
+    signal modeSelected(string mode)
+    signal platformSelected(string platform)
+    signal filesRequested()
+    signal folderRequested()
+
+    onVisibleChanged: {
+        if (!root.visible) {
+            root.closeAllPopups();
+        }
+    }
+
+    function closeAllPopups() {
+        contextPopup.close();
+        modelPopup.close();
+        modePopup.close();
+        root.mentionQueryActive = false;
+    }
 
     function submitPrompt() {
         if (!root.isConnected)
@@ -91,23 +112,14 @@ Item {
         }
     }
 
-    FileMentionPopup {
-        id: mentionPopup
+    MouseArea {
+        id: popupDismisser
 
-        z: 10
-        anchors {
-            bottom: mainLayout.bottom
-            bottomMargin: inputContainer.height + Tokens.spacing.small
-            left: mainLayout.left
-        }
-        width: Math.min(360, mainLayout.width)
-        visible: Boolean(mentionPopup.matches && mentionPopup.matches.length > 0 && root.mentionQueryActive)
-
-        onFileSelected: function(path) {
-            root.insertMention(path);
-        }
-        onDismissed: {
-            root.mentionQueryActive = false;
+        anchors.fill: parent
+        z: 90
+        visible: contextPopup.isOpen || modelPopup.isOpen || modePopup.isOpen
+        onClicked: {
+            root.closeAllPopups();
         }
     }
 
@@ -215,163 +227,431 @@ Item {
             }
         }
 
-        // Attachment chips
-        RowLayout {
-            id: attachmentBar
+        // Unified Input Card
+        StyledRect {
+            id: inputCard
 
-            visible: root.attachments.length > 0
-            spacing: Tokens.spacing.small
             Layout.fillWidth: true
+            implicitHeight: inputCardCol.implicitHeight + Tokens.padding.medium * 2
+            radius: Tokens.rounding.extraLarge
+            color: Colours.palette.m3surfaceContainer
+            border.color: Colours.palette.m3outlineVariant
+            border.width: 1
 
-            Repeater {
-                model: root.attachments
+            FileMentionPopup {
+                id: mentionPopup
 
-                delegate: StyledRect {
-                    id: chipRect
+                z: 100
+                width: Math.min(360, root.width)
+                visible: Boolean(mentionPopup.matches && mentionPopup.matches.length > 0 && root.mentionQueryActive)
+                anchors {
+                    bottom: parent.top
+                    bottomMargin: Tokens.spacing.small
+                    left: parent.left
+                }
 
-                    required property string modelData
-                    required property int index
-
-                    implicitHeight: 28
-                    implicitWidth: chipRow.implicitWidth + Tokens.padding.medium
-                    radius: Tokens.rounding.full
-                    color: Colours.palette.m3secondaryContainer
-
-                    RowLayout {
-                        id: chipRow
-                        anchors.centerIn: parent
-                        spacing: Tokens.spacing.extraSmall
-
-                        MaterialIcon {
-                            text: "attachment"
-                            color: Colours.palette.m3onSecondaryContainer
-                            fontStyle: Tokens.font.icon.builders.small.weight(Font.Normal).build()
-                        }
-
-                        StyledText {
-                            text: {
-                                const clean = chipRect.modelData.replace(/\/+$/, "");
-                                return clean.substring(clean.lastIndexOf("/") + 1) || chipRect.modelData;
-                            }
-                            color: Colours.palette.m3onSecondaryContainer
-                            font: Tokens.font.label.small
-                            elide: Text.ElideMiddle
-                            Layout.maximumWidth: 120
-                        }
-
-                        MaterialIcon {
-                            text: "close"
-                            color: Colours.palette.m3onSecondaryContainer
-                            fontStyle: Tokens.font.icon.builders.small.weight(Font.Bold).build()
-
-                            StateLayer {
-                                anchors.fill: parent
-                                radius: Tokens.rounding.full
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.removeAttachment(chipRect.index)
-                            }
-                        }
-                    }
+                onFileSelected: function(path) {
+                    root.insertMention(path);
+                }
+                onDismissed: {
+                    root.mentionQueryActive = false;
                 }
             }
-        }
 
-        // Input bar
-        StyledRect {
-            id: inputContainer
+            ContextMenuPopup {
+                id: contextPopup
 
-            implicitHeight: 48
-            radius: Tokens.rounding.full
-            color: Colours.palette.m3surfaceContainer
-
-            Layout.fillWidth: true
-
-            RowLayout {
-                spacing: Tokens.spacing.small
-
+                z: 100
                 anchors {
-                    fill: parent
-                    leftMargin: Tokens.padding.large
-                    rightMargin: Tokens.padding.small
+                    bottom: parent.top
+                    bottomMargin: Tokens.spacing.small
+                    left: parent.left
+                    leftMargin: Tokens.padding.medium
                 }
 
-                TextInput {
-                    id: inputField
+                onFilesRequested: function() {
+                    root.filesRequested();
+                }
+                onFolderRequested: function() {
+                    root.folderRequested();
+                }
+                onMentionsRequested: function() {
+                    inputField.text = inputField.text + "@";
+                    inputField.cursorPosition = inputField.text.length;
+                    root.checkMention();
+                    root.focusInput();
+                }
+            }
 
-                    color: Colours.palette.m3onSurface
-                    font: Tokens.font.body.medium
-                    clip: true
+            ModelSelectorPopup {
+                id: modelPopup
 
+                z: 100
+                currentPlatform: root.currentPlatform
+                anchors {
+                    bottom: parent.top
+                    bottomMargin: Tokens.spacing.small
+                    left: parent.left
+                    leftMargin: Tokens.padding.medium + 36
+                }
+
+                onPlatformSelected: function(platform) {
+                    root.currentPlatform = platform;
+                    root.platformSelected(platform);
+                    root.focusInput();
+                }
+            }
+
+            ModeSelectorPopup {
+                id: modePopup
+
+                z: 100
+                currentMode: root.currentMode
+                anchors {
+                    bottom: parent.top
+                    bottomMargin: Tokens.spacing.small
+                    right: parent.right
+                    rightMargin: Tokens.padding.medium + 40
+                }
+
+                onModeSelected: function(mode) {
+                    root.currentMode = mode;
+                    root.modeSelected(mode);
+                    root.focusInput();
+                }
+            }
+
+            ColumnLayout {
+                id: inputCardCol
+
+                spacing: Tokens.spacing.small
+                anchors {
+                    left: parent.left
+                    right: parent.right
+                    top: parent.top
+                    margins: Tokens.padding.medium
+                }
+
+                // Attachment chips (wrapping flow)
+                Flow {
+                    id: attachmentBar
+
+                    visible: root.attachments.length > 0
+                    spacing: Tokens.spacing.small
                     Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignVCenter
 
-                    onTextChanged: {
-                        root.checkMention();
+                    Repeater {
+                        id: chipRepeater
+
+                        model: root.attachments
+
+                        delegate: StyledRect {
+                            id: chipRect
+
+                            required property string modelData
+                            required property int index
+
+                            implicitHeight: 28
+                            implicitWidth: chipRow.implicitWidth + Tokens.padding.medium
+                            radius: Tokens.rounding.full
+                            color: Colours.palette.m3secondaryContainer
+
+                            RowLayout {
+                                id: chipRow
+
+                                spacing: Tokens.spacing.extraSmall
+                                anchors.centerIn: parent
+
+                                MaterialIcon {
+                                    text: "attachment"
+                                    color: Colours.palette.m3onSecondaryContainer
+                                    fontStyle: Tokens.font.icon.builders.small.weight(Font.Normal).build()
+                                }
+
+                                StyledText {
+                                    text: {
+                                        const clean = chipRect.modelData.replace(/\/+$/, "");
+                                        return clean.substring(clean.lastIndexOf("/") + 1) || chipRect.modelData;
+                                    }
+                                    color: Colours.palette.m3onSecondaryContainer
+                                    font: Tokens.font.label.small
+                                    elide: Text.ElideMiddle
+                                    Layout.maximumWidth: 140
+                                }
+
+                                MaterialIcon {
+                                    text: "close"
+                                    color: Colours.palette.m3onSecondaryContainer
+                                    fontStyle: Tokens.font.icon.builders.small.weight(Font.Bold).build()
+
+                                    StateLayer {
+                                        anchors.fill: parent
+                                        radius: Tokens.rounding.full
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.removeAttachment(chipRect.index)
+                                    }
+                                }
+                            }
+                        }
                     }
+                }
 
-                    Keys.onPressed: function(event) {
-                        if (mentionPopup.visible) {
-                            if (event.key === Qt.Key_Down) {
-                                mentionPopup.selectNext();
-                                event.accepted = true;
-                                return;
+                // Text Input area (multiline auto-expanding)
+                Item {
+                    implicitHeight: Math.min(120, Math.max(28, inputField.implicitHeight))
+                    Layout.fillWidth: true
+
+                    Flickable {
+                        id: inputFlickable
+
+                        clip: true
+                        boundsBehavior: Flickable.StopAtBounds
+                        contentWidth: width
+                        contentHeight: inputField.implicitHeight
+                        anchors {
+                            fill: parent
+                            leftMargin: Tokens.padding.small
+                            rightMargin: Tokens.padding.small
+                        }
+
+                        TextEdit {
+                            id: inputField
+
+                            width: inputFlickable.width
+                            wrapMode: TextEdit.Wrap
+                            color: Colours.palette.m3onSurface
+                            font: Tokens.font.body.medium
+                            selectByMouse: true
+
+                            onTextChanged: {
+                                root.checkMention();
                             }
-                            if (event.key === Qt.Key_Up) {
-                                mentionPopup.selectPrevious();
-                                event.accepted = true;
-                                return;
+
+                            onCursorRectangleChanged: {
+                                inputFlickable.contentY = Math.max(0, inputField.cursorRectangle.y + inputField.cursorRectangle.height - inputFlickable.height);
                             }
-                            if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !(event.modifiers & Qt.ShiftModifier)) {
-                                if (mentionPopup.matches && mentionPopup.matches.length > 0) {
-                                    mentionPopup.triggerSelection();
+
+                            Keys.onPressed: function(event) {
+                                if (event.key === Qt.Key_Escape) {
+                                    if (contextPopup.isOpen || modelPopup.isOpen || modePopup.isOpen) {
+                                        root.closeAllPopups();
+                                        event.accepted = true;
+                                        return;
+                                    }
+                                    if (mentionPopup.visible) {
+                                        root.mentionQueryActive = false;
+                                        event.accepted = true;
+                                        return;
+                                    }
+                                }
+
+                                if (mentionPopup.visible) {
+                                    if (event.key === Qt.Key_Down) {
+                                        mentionPopup.selectNext();
+                                        event.accepted = true;
+                                        return;
+                                    }
+                                    if (event.key === Qt.Key_Up) {
+                                        mentionPopup.selectPrevious();
+                                        event.accepted = true;
+                                        return;
+                                    }
+                                    if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !(event.modifiers & Qt.ShiftModifier)) {
+                                        if (mentionPopup.matches && mentionPopup.matches.length > 0) {
+                                            mentionPopup.triggerSelection();
+                                            event.accepted = true;
+                                            return;
+                                        }
+                                    }
+                                }
+
+                                if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !(event.modifiers & Qt.ShiftModifier)) {
+                                    root.submitPrompt();
                                     event.accepted = true;
                                     return;
                                 }
                             }
-                            if (event.key === Qt.Key_Escape) {
-                                root.mentionQueryActive = false;
-                                event.accepted = true;
-                                return;
+
+                            StyledText {
+                                anchors.fill: parent
+                                text: root.isConnected ? "Ask anything, @ to mention, / for actions" : "Connecting to daemon..."
+                                color: Colours.palette.m3onSurfaceVariant
+                                font: parent.font
+                                visible: !inputField.text
                             }
                         }
-
-                        if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !(event.modifiers & Qt.ShiftModifier)) {
-                            root.submitPrompt();
-                            event.accepted = true;
-                        }
-                    }
-
-                    StyledText {
-                        anchors.fill: parent
-                        text: root.isConnected ? "Ask Aetheris or dispatch task..." : "Connecting to daemon..."
-                        color: Colours.palette.m3onSurfaceVariant
-                        font: parent.font
-                        visible: !inputField.text
                     }
                 }
 
-                StyledRect {
-                    id: sendButton
+                // Bottom Controls Row
+                RowLayout {
+                    spacing: Tokens.spacing.small
+                    Layout.fillWidth: true
 
-                    readonly property bool canSend: root.isConnected && (inputField.text.trim().length > 0 || root.attachments.length > 0)
+                    // "+" Add Context button
+                    StyledRect {
+                        id: addContextBtn
 
-                    implicitWidth: 36
-                    implicitHeight: 36
-                    radius: Tokens.rounding.full
-                    color: canSend ? Colours.palette.m3primary : Colours.palette.m3surfaceContainerHighest
-
-                    StateLayer {
-                        anchors.fill: parent
+                        implicitWidth: 28
+                        implicitHeight: 28
                         radius: Tokens.rounding.full
-                        cursorShape: sendButton.canSend ? Qt.PointingHandCursor : Qt.ArrowCursor
-                        onClicked: root.submitPrompt()
+                        color: contextPopup.isOpen ? Colours.palette.m3surfaceContainerHighest : "transparent"
+                        Accessible.role: Accessible.Button
+                        Accessible.name: "Add Context"
+
+                        MaterialIcon {
+                            anchors.centerIn: parent
+                            text: "add"
+                            color: Colours.palette.m3onSurfaceVariant
+                            fontStyle: Tokens.font.icon.builders.small.weight(Font.Normal).build()
+                        }
+
+                        StateLayer {
+                            anchors.fill: parent
+                            radius: Tokens.rounding.full
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                modelPopup.close();
+                                modePopup.close();
+                                contextPopup.toggle();
+                            }
+                        }
                     }
 
-                    MaterialIcon {
-                        anchors.centerIn: parent
-                        text: "arrow_upward"
-                        color: sendButton.canSend ? Colours.palette.m3onPrimary : Colours.palette.m3onSurfaceVariant
-                        fontStyle: Tokens.font.icon.builders.small.weight(Font.Bold).build()
+                    // Model Selector Button
+                    StyledRect {
+                        id: modelBtn
+
+                        implicitHeight: 28
+                        implicitWidth: modelRow.implicitWidth + Tokens.padding.small * 2
+                        radius: Tokens.rounding.full
+                        color: modelPopup.isOpen ? Colours.palette.m3surfaceContainerHighest : "transparent"
+                        Accessible.role: Accessible.Button
+                        Accessible.name: "Select Model"
+
+                        RowLayout {
+                            id: modelRow
+
+                            spacing: Tokens.spacing.extraSmall
+                            anchors.centerIn: parent
+
+                            MaterialIcon {
+                                text: root.currentPlatform === "claude" ? "terminal"
+                                    : root.currentPlatform === "direct" ? "api"
+                                    : "smart_toy"
+                                color: Colours.palette.m3onSurfaceVariant
+                                fontStyle: Tokens.font.icon.builders.small.weight(Font.Normal).build()
+                            }
+
+                            StyledText {
+                                text: root.currentPlatform === "claude" ? "Claude Code"
+                                    : root.currentPlatform === "direct" ? "Direct LLM"
+                                    : "Antigravity"
+                                font: Tokens.font.label.small
+                                color: Colours.palette.m3onSurfaceVariant
+                            }
+
+                            MaterialIcon {
+                                text: "expand_less"
+                                color: Colours.palette.m3outline
+                                fontStyle: Tokens.font.icon.builders.small.weight(Font.Normal).build()
+                            }
+                        }
+
+                        StateLayer {
+                            anchors.fill: parent
+                            radius: Tokens.rounding.full
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                contextPopup.close();
+                                modePopup.close();
+                                modelPopup.toggle();
+                            }
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    // Mode Selector Button
+                    StyledRect {
+                        id: modeBtn
+
+                        implicitHeight: 28
+                        implicitWidth: modeRow.implicitWidth + Tokens.padding.small * 2
+                        radius: Tokens.rounding.full
+                        color: modePopup.isOpen ? Colours.palette.m3surfaceContainerHighest : "transparent"
+                        Accessible.role: Accessible.Button
+                        Accessible.name: "Select Execution Mode"
+
+                        RowLayout {
+                            id: modeRow
+
+                            spacing: Tokens.spacing.extraSmall
+                            anchors.centerIn: parent
+
+                            MaterialIcon {
+                                text: root.currentMode === "yolo" ? "bolt"
+                                    : root.currentMode === "plan" ? "edit_note"
+                                    : "shield"
+                                color: root.currentMode === "yolo" ? Colours.palette.m3error
+                                     : root.currentMode === "plan" ? Colours.palette.m3tertiary
+                                     : Colours.palette.m3primary
+                                fontStyle: Tokens.font.icon.builders.small.weight(Font.Normal).build()
+                            }
+
+                            StyledText {
+                                text: root.currentMode === "yolo" ? "YOLO"
+                                    : root.currentMode === "plan" ? "Plan"
+                                    : "Safe"
+                                font: Tokens.font.label.small
+                                color: Colours.palette.m3onSurface
+                            }
+
+                            MaterialIcon {
+                                text: "expand_less"
+                                color: Colours.palette.m3outline
+                                fontStyle: Tokens.font.icon.builders.small.weight(Font.Normal).build()
+                            }
+                        }
+
+                        StateLayer {
+                            anchors.fill: parent
+                            radius: Tokens.rounding.full
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                contextPopup.close();
+                                modelPopup.close();
+                                modePopup.toggle();
+                            }
+                        }
+                    }
+
+                    // Circular Send Button
+                    StyledRect {
+                        id: sendButton
+
+                        readonly property bool canSend: root.isConnected && (inputField.text.trim().length > 0 || root.attachments.length > 0)
+
+                        implicitWidth: 32
+                        implicitHeight: 32
+                        radius: Tokens.rounding.full
+                        color: canSend ? Colours.palette.m3primary : Colours.palette.m3surfaceContainerHighest
+                        Accessible.role: Accessible.Button
+                        Accessible.name: "Send Message"
+
+                        MaterialIcon {
+                            anchors.centerIn: parent
+                            text: "arrow_forward"
+                            color: sendButton.canSend ? Colours.palette.m3onPrimary : Colours.palette.m3onSurfaceVariant
+                            fontStyle: Tokens.font.icon.builders.small.weight(Font.Bold).build()
+                        }
+
+                        StateLayer {
+                            anchors.fill: parent
+                            radius: Tokens.rounding.full
+                            cursorShape: sendButton.canSend ? Qt.PointingHandCursor : Qt.ArrowCursor
+                            onClicked: root.submitPrompt()
+                        }
                     }
                 }
             }
