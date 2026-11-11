@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtWebSockets
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
 import Caelestia.Config
@@ -78,7 +79,7 @@ PanelWindow {
             if (ws.status !== WebSocket.Open) {
                 root.isThinking = false;
             } else if (ws.status === WebSocket.Open) {
-                root.dispatchConfigUpdate(modeBar.currentMode, modeBar.thinkingBudget);
+                root.dispatchConfigUpdate(chatView.currentMode, "off", chatView.currentPlatform);
             }
         }
 
@@ -189,16 +190,45 @@ PanelWindow {
         ws.sendTextMessage(JSON.stringify(req));
     }
 
-    function dispatchConfigUpdate(mode, thinking) {
+    function dispatchConfigUpdate(mode, thinking, platform) {
         if (ws.status === WebSocket.Open) {
             ws.sendTextMessage(JSON.stringify({
                 type: "update_config",
                 payload: {
-                    platform: "antigravity",
-                    mode: mode,
-                    thinking: thinking
+                    platform: platform || chatView.currentPlatform,
+                    mode: mode || chatView.currentMode,
+                    thinking: thinking || "off"
                 }
             }));
+        }
+    }
+
+    Process {
+        id: filePickerProc
+
+        command: ["zenity", "--file-selection", "--multiple", "--separator=\n"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (!text) return;
+                const lines = text.trim().split("\n");
+                for (let i = 0; i < lines.length; i++) {
+                    const clean = lines[i].trim();
+                    if (clean) chatView.addAttachment(clean);
+                }
+            }
+        }
+    }
+
+    Process {
+        id: folderPickerProc
+
+        command: ["zenity", "--file-selection", "--directory"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (!text) return;
+                const clean = text.trim();
+                if (clean) chatView.addAttachment(clean);
+            }
         }
     }
 
@@ -384,24 +414,6 @@ PanelWindow {
                 }
             }
 
-            // Mode & Thinking Selector
-            ModeBar {
-                id: modeBar
-
-                Layout.fillWidth: true
-                Layout.leftMargin: Tokens.padding.medium
-                Layout.rightMargin: Tokens.padding.medium
-                Layout.topMargin: Tokens.spacing.extraSmall
-                Layout.bottomMargin: Tokens.spacing.extraSmall
-
-                onModeSelected: function(mode) {
-                    root.dispatchConfigUpdate(mode, modeBar.thinkingBudget);
-                }
-                onThinkingSelected: function(budget) {
-                    root.dispatchConfigUpdate(modeBar.currentMode, budget);
-                }
-            }
-
             // Chat View
             ChatView {
                 id: chatView
@@ -411,6 +423,22 @@ PanelWindow {
 
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+
+                onModeSelected: function(mode) {
+                    root.dispatchConfigUpdate(mode, "off", chatView.currentPlatform);
+                }
+
+                onPlatformSelected: function(plat) {
+                    root.dispatchConfigUpdate(chatView.currentMode, "off", plat);
+                }
+
+                onFilesRequested: function() {
+                    filePickerProc.running = true;
+                }
+
+                onFolderRequested: function() {
+                    folderPickerProc.running = true;
+                }
 
                 onSendRequested: function(text, attachments) {
                     root.dispatchPrompt(text, attachments);
