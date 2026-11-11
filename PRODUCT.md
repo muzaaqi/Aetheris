@@ -116,10 +116,10 @@ Aetheris eliminates this friction by making the agent **ambient, omnipresent, an
 - [x] 2-tier skill scanner indexes global and workspace skills.
 
 ### Phase 3: Safety Guardrails & Tool Execution
-- [ ] Inline Tool Cards render for tool calls (`run_command`, `write_file`, MCP).
-- [ ] Interactive `[Approve]` and `[Reject]` buttons intercept tool execution in Safe Mode.
-- [ ] Universal Mode Switcher (`Safe`, `YOLO`, `Plan-Only`) functional.
-- [ ] Collapsible inline diff viewer renders code modifications.
+- [x] Inline Tool Cards render for tool calls (`run_command`, `write_file`, MCP).
+- [x] Interactive `[Approve]` and `[Reject]` buttons intercept tool execution in Safe Mode.
+- [x] Universal Mode Switcher (`Safe`, `YOLO`, `Plan-Only`) functional.
+- [x] Collapsible inline diff viewer renders code modifications.
 
 ### Phase 4: Ergonomics & Thinking Controls
 - [ ] Selection text quoting and smart code-block quoting functional.
