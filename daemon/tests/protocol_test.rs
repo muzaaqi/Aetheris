@@ -106,3 +106,101 @@ fn malformed_json_returns_error() {
     let result = serde_json::from_str::<ClientMessage>("}{broken");
     assert!(result.is_err());
 }
+
+#[test]
+fn execution_mode_serialization_and_parsing() {
+    use aetheris_daemon::protocol::ExecutionMode;
+    use std::str::FromStr;
+
+    assert_eq!(
+        ExecutionMode::from_str("safe").unwrap(),
+        ExecutionMode::Safe
+    );
+    assert_eq!(
+        ExecutionMode::from_str("yolo").unwrap(),
+        ExecutionMode::Yolo
+    );
+    assert_eq!(
+        ExecutionMode::from_str("plan").unwrap(),
+        ExecutionMode::PlanOnly
+    );
+    assert_eq!(
+        ExecutionMode::from_str("plan-only").unwrap(),
+        ExecutionMode::PlanOnly
+    );
+    assert_eq!(
+        ExecutionMode::from_str("plan_only").unwrap(),
+        ExecutionMode::PlanOnly
+    );
+
+    assert_eq!(
+        serde_json::to_string(&ExecutionMode::Safe).unwrap(),
+        "\"safe\""
+    );
+    assert_eq!(
+        serde_json::to_string(&ExecutionMode::Yolo).unwrap(),
+        "\"yolo\""
+    );
+    assert_eq!(
+        serde_json::to_string(&ExecutionMode::PlanOnly).unwrap(),
+        "\"plan_only\""
+    );
+
+    let parsed: ExecutionMode = serde_json::from_str("\"plan\"").unwrap();
+    assert_eq!(parsed, ExecutionMode::PlanOnly);
+}
+
+#[test]
+fn thinking_budget_serialization_and_parsing() {
+    use aetheris_daemon::protocol::ThinkingBudget;
+    use std::str::FromStr;
+
+    assert_eq!(
+        ThinkingBudget::from_str("off").unwrap(),
+        ThinkingBudget::Off
+    );
+    assert_eq!(
+        ThinkingBudget::from_str("low").unwrap(),
+        ThinkingBudget::Low
+    );
+    assert_eq!(
+        ThinkingBudget::from_str("medium").unwrap(),
+        ThinkingBudget::Medium
+    );
+    assert_eq!(
+        ThinkingBudget::from_str("high").unwrap(),
+        ThinkingBudget::High
+    );
+}
+
+#[test]
+fn tool_call_request_with_diff_roundtrips() {
+    use aetheris_daemon::protocol::{ServerMessage, ToolCallRequestPayload};
+
+    let msg = ServerMessage::ToolCallRequest(ToolCallRequestPayload {
+        tool_call_id: "call_abc".to_string(),
+        tool_name: "write_file".to_string(),
+        args: serde_json::json!({ "path": "main.rs" }),
+        requires_approval: true,
+        diff: Some("--- a/main.rs\n+++ b/main.rs\n@@ -1 +1 @@\n-old\n+new".to_string()),
+    });
+
+    let json = serde_json::to_string(&msg).unwrap();
+    let deserialized: ServerMessage = serde_json::from_str(&json).unwrap();
+    assert_eq!(msg, deserialized);
+}
+
+#[test]
+fn tool_call_result_serializes_and_roundtrips() {
+    use aetheris_daemon::protocol::{ServerMessage, ToolCallResultPayload};
+
+    let msg = ServerMessage::ToolCallResult(ToolCallResultPayload {
+        tool_call_id: "call_abc".to_string(),
+        success: true,
+        output: "Finished execution".to_string(),
+    });
+
+    let json = serde_json::to_string(&msg).unwrap();
+    let deserialized: ServerMessage = serde_json::from_str(&json).unwrap();
+    assert_eq!(msg, deserialized);
+}
