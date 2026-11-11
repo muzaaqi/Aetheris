@@ -6,6 +6,7 @@
 pub mod adapters;
 pub mod config;
 pub mod context;
+pub mod diff;
 pub mod error;
 pub mod hyprland;
 pub mod protocol;
