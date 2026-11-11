@@ -22,6 +22,15 @@ impl ClaudeAdapter {
         }
     }
 
+    /// Returns the current execution mode of the adapter.
+    pub fn current_mode(&self) -> ExecutionMode {
+        if let Ok(lock) = self.mode.read() {
+            *lock
+        } else {
+            ExecutionMode::Safe
+        }
+    }
+
     /// Builds command-line arguments for invoking Claude Code CLI with safety flags.
     pub fn build_cli_args(&self, prompt: &str, mode: ExecutionMode) -> Vec<String> {
         let mut args = vec!["-p".to_string(), prompt.to_string()];

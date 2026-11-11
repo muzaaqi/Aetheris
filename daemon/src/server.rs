@@ -183,9 +183,14 @@ async fn handle_client(
                             }
                             Ok(ClientMessage::UpdateConfig(payload)) => {
                                 tracing::debug!("Received UpdateConfig from {peer_addr}: platform={}, mode={}, thinking={}", payload.platform, payload.mode, payload.thinking);
-                                if let Ok(new_mode) = ExecutionMode::from_str(&payload.mode) {
-                                    *execution_mode.write().await = new_mode;
-                                    tracing::info!("Updated daemon execution mode to: {new_mode:?}");
+                                match ExecutionMode::from_str(&payload.mode) {
+                                    Ok(new_mode) => {
+                                        *execution_mode.write().await = new_mode;
+                                        tracing::info!("Updated daemon execution mode to: {new_mode:?}");
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!("Failed to parse execution mode from {peer_addr}: {e}");
+                                    }
                                 }
                             }
                             Ok(ClientMessage::SearchFiles(payload)) => {

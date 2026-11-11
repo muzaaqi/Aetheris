@@ -41,6 +41,14 @@ pub fn generate_unified_diff(
             let m = old_lines.len();
             let n = new_lines.len();
 
+            const MAX_DIFF_LINES: usize = 1500;
+            const MAX_DIFF_CELLS: usize = 1_000_000;
+            if m > MAX_DIFF_LINES || n > MAX_DIFF_LINES || m.saturating_mul(n) > MAX_DIFF_CELLS {
+                return format!(
+                    "--- a/{clean_label}\n+++ b/{clean_label}\n@@ diff truncated (file too large: {m} -> {n} lines) @@\n"
+                );
+            }
+
             let mut dp = vec![vec![0u32; n + 1]; m + 1];
             for i in 0..m {
                 for j in 0..n {

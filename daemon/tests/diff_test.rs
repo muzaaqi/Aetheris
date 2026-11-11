@@ -54,3 +54,13 @@ async fn compute_file_diff_handles_new_and_existing() {
     assert!(diff3.contains("-fn add() {}"));
     assert!(diff3.contains("+fn add(a: i32) {}"));
 }
+
+#[test]
+fn large_diff_is_truncated_to_prevent_oom() {
+    // Generate 3,000 lines
+    let old_large = "line\n".repeat(2000);
+    let new_large = "other\n".repeat(2000);
+
+    let diff = generate_unified_diff(Some(&old_large), &new_large, "huge.txt");
+    assert!(diff.contains("diff truncated (file too large"));
+}

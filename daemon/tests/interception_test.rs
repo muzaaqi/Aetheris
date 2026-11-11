@@ -96,17 +96,32 @@ async fn plan_only_mode_rejects_mutating_tools() {
     let registry = Arc::new(ApprovalRegistry::new());
     let interceptor = ToolInterceptor::new(mode, registry, event_tx);
 
-    let result = interceptor
-        .evaluate_tool_call(
-            "call_3",
-            "run_command",
-            serde_json::json!({ "command": "rm -rf /" }),
-            None,
-            Duration::from_secs(1),
-        )
-        .await;
+    let tools_to_test = [
+        "run_command",
+        "write_file",
+        "Write",
+        "Edit",
+        "patch",
+        "bash",
+        "execute",
+        "run_sql",
+    ];
+    for tool in tools_to_test {
+        let result = interceptor
+            .evaluate_tool_call(
+                "call_mut",
+                tool,
+                serde_json::json!({ "command": "rm -rf /" }),
+                None,
+                Duration::from_secs(1),
+            )
+            .await;
 
-    assert!(result.is_err(), "Plan-Only mode must reject mutating tools");
+        assert!(
+            result.is_err(),
+            "Plan-Only mode must reject mutating tool '{tool}'"
+        );
+    }
 }
 
 #[tokio::test]
