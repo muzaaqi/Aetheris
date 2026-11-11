@@ -9,6 +9,7 @@ pub mod context;
 pub mod diff;
 pub mod error;
 pub mod hyprland;
+pub mod interception;
 pub mod mcp;
 pub mod protocol;
 pub mod server;
