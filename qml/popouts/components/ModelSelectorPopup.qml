@@ -34,24 +34,26 @@ StyledRect {
     ColumnLayout {
         id: modelCol
 
+        spacing: Tokens.spacing.extraSmall
         anchors {
             left: parent.left
             right: parent.right
             top: parent.top
             margins: Tokens.padding.small
         }
-        spacing: Tokens.spacing.extraSmall
 
         StyledText {
-            Layout.leftMargin: Tokens.padding.small
-            Layout.topMargin: Tokens.padding.extraSmall
-            Layout.bottomMargin: Tokens.padding.extraSmall
             text: "Select Model / Platform"
             font: Tokens.font.label.small
             color: Colours.palette.m3onSurfaceVariant
+            Layout.leftMargin: Tokens.padding.small
+            Layout.topMargin: Tokens.padding.extraSmall
+            Layout.bottomMargin: Tokens.padding.extraSmall
         }
 
         Repeater {
+            id: modelRepeater
+
             model: [
                 { id: "antigravity", label: "Antigravity", icon: "smart_toy" },
                 { id: "claude", label: "Claude Code", icon: "terminal" },
@@ -62,21 +64,20 @@ StyledRect {
                 id: platformRect
 
                 required property var modelData
-
                 readonly property bool isSelected: root.currentPlatform === modelData.id
 
-                Layout.fillWidth: true
                 implicitHeight: 36
                 radius: Tokens.rounding.medium
                 color: isSelected ? Colours.palette.m3primaryContainer : "transparent"
+                Layout.fillWidth: true
 
                 RowLayout {
+                    spacing: Tokens.spacing.small
                     anchors {
                         fill: parent
                         leftMargin: Tokens.padding.small
                         rightMargin: Tokens.padding.small
                     }
-                    spacing: Tokens.spacing.small
 
                     MaterialIcon {
                         text: platformRect.modelData.icon

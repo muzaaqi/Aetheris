@@ -39,11 +39,17 @@ PanelWindow {
 
     Shortcut {
         sequence: "Escape"
-        onActivated: root.visible = false
+        onActivated: {
+            if (chatView.hasActivePopup) {
+                chatView.closeAllPopups();
+            } else {
+                root.visible = false;
+            }
+        }
     }
 
     HyprlandFocusGrab {
-        active: root.visible
+        active: root.visible && !filePickerProc.running && !folderPickerProc.running
         windows: [root]
         onCleared: root.visible = false
     }
@@ -51,6 +57,8 @@ PanelWindow {
     onVisibleChanged: {
         if (root.visible) {
             chatView.focusInput();
+        } else {
+            chatView.closeAllPopups();
         }
     }
 
@@ -206,7 +214,13 @@ PanelWindow {
     Process {
         id: filePickerProc
 
-        command: ["zenity", "--file-selection", "--multiple", "--separator=\n"]
+        command: {
+            const cmd = ["zenity", "--file-selection", "--multiple", "--separator=\n"];
+            if (root.currentWorkspacePath) {
+                cmd.push("--filename=" + root.currentWorkspacePath + "/");
+            }
+            return cmd;
+        }
         stdout: StdioCollector {
             onStreamFinished: {
                 if (!text) return;
@@ -215,6 +229,7 @@ PanelWindow {
                     const clean = lines[i].trim();
                     if (clean) chatView.addAttachment(clean);
                 }
+                chatView.focusInput();
             }
         }
     }
@@ -222,12 +237,19 @@ PanelWindow {
     Process {
         id: folderPickerProc
 
-        command: ["zenity", "--file-selection", "--directory"]
+        command: {
+            const cmd = ["zenity", "--file-selection", "--directory"];
+            if (root.currentWorkspacePath) {
+                cmd.push("--filename=" + root.currentWorkspacePath + "/");
+            }
+            return cmd;
+        }
         stdout: StdioCollector {
             onStreamFinished: {
                 if (!text) return;
                 const clean = text.trim();
                 if (clean) chatView.addAttachment(clean);
+                chatView.focusInput();
             }
         }
     }

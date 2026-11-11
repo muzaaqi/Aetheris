@@ -39,24 +39,26 @@ StyledRect {
     ColumnLayout {
         id: menuCol
 
+        spacing: Tokens.spacing.extraSmall
         anchors {
             left: parent.left
             right: parent.right
             top: parent.top
             margins: Tokens.padding.small
         }
-        spacing: Tokens.spacing.extraSmall
 
         StyledText {
-            Layout.leftMargin: Tokens.padding.small
-            Layout.topMargin: Tokens.padding.extraSmall
-            Layout.bottomMargin: Tokens.padding.extraSmall
             text: "Add Context"
             font: Tokens.font.label.small
             color: Colours.palette.m3onSurfaceVariant
+            Layout.leftMargin: Tokens.padding.small
+            Layout.topMargin: Tokens.padding.extraSmall
+            Layout.bottomMargin: Tokens.padding.extraSmall
         }
 
         Repeater {
+            id: menuRepeater
+
             model: [
                 { id: "files", label: "Files", icon: "attach_file" },
                 { id: "folder", label: "Folder", icon: "folder_open" },
@@ -68,18 +70,18 @@ StyledRect {
 
                 required property var modelData
 
-                Layout.fillWidth: true
                 implicitHeight: 32
                 radius: Tokens.rounding.medium
                 color: "transparent"
+                Layout.fillWidth: true
 
                 RowLayout {
+                    spacing: Tokens.spacing.small
                     anchors {
                         fill: parent
                         leftMargin: Tokens.padding.small
                         rightMargin: Tokens.padding.small
                     }
-                    spacing: Tokens.spacing.small
 
                     MaterialIcon {
                         text: itemRect.modelData.icon

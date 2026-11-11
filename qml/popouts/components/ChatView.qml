@@ -15,6 +15,7 @@ Item {
     property int mentionStartIndex: -1
     property string currentPlatform: "antigravity"
     property string currentMode: "safe"
+    readonly property bool hasActivePopup: contextPopup.isOpen || modelPopup.isOpen || modePopup.isOpen || mentionPopup.visible
 
     signal sendRequested(string text, var attachments)
     signal fileSearchRequested(string query)
@@ -23,6 +24,19 @@ Item {
     signal platformSelected(string platform)
     signal filesRequested()
     signal folderRequested()
+
+    onVisibleChanged: {
+        if (!root.visible) {
+            root.closeAllPopups();
+        }
+    }
+
+    function closeAllPopups() {
+        contextPopup.close();
+        modelPopup.close();
+        modePopup.close();
+        root.mentionQueryActive = false;
+    }
 
     function submitPrompt() {
         if (!root.isConnected)
@@ -98,81 +112,14 @@ Item {
         }
     }
 
-    FileMentionPopup {
-        id: mentionPopup
+    MouseArea {
+        id: popupDismisser
 
-        z: 10
-        anchors {
-            bottom: mainLayout.bottom
-            bottomMargin: inputCard.height + Tokens.spacing.small
-            left: mainLayout.left
-        }
-        width: Math.min(360, mainLayout.width)
-        visible: Boolean(mentionPopup.matches && mentionPopup.matches.length > 0 && root.mentionQueryActive)
-
-        onFileSelected: function(path) {
-            root.insertMention(path);
-        }
-        onDismissed: {
-            root.mentionQueryActive = false;
-        }
-    }
-
-    ContextMenuPopup {
-        id: contextPopup
-
-        anchors {
-            bottom: mainLayout.bottom
-            bottomMargin: inputCard.height + Tokens.spacing.small
-            left: mainLayout.left
-            leftMargin: Tokens.padding.medium
-        }
-
-        onFilesRequested: function() {
-            root.filesRequested();
-        }
-        onFolderRequested: function() {
-            root.folderRequested();
-        }
-        onMentionsRequested: function() {
-            inputField.text = inputField.text + "@";
-            inputField.cursorPosition = inputField.text.length;
-            root.checkMention();
-            root.focusInput();
-        }
-    }
-
-    ModelSelectorPopup {
-        id: modelPopup
-
-        anchors {
-            bottom: mainLayout.bottom
-            bottomMargin: inputCard.height + Tokens.spacing.small
-            left: mainLayout.left
-            leftMargin: Tokens.padding.medium + 36
-        }
-        currentPlatform: root.currentPlatform
-
-        onPlatformSelected: function(platform) {
-            root.currentPlatform = platform;
-            root.platformSelected(platform);
-        }
-    }
-
-    ModeSelectorPopup {
-        id: modePopup
-
-        anchors {
-            bottom: mainLayout.bottom
-            bottomMargin: inputCard.height + Tokens.spacing.small
-            right: mainLayout.right
-            rightMargin: Tokens.padding.medium + 40
-        }
-        currentMode: root.currentMode
-
-        onModeSelected: function(mode) {
-            root.currentMode = mode;
-            root.modeSelected(mode);
+        anchors.fill: parent
+        z: 90
+        visible: contextPopup.isOpen || modelPopup.isOpen || modePopup.isOpen
+        onClicked: {
+            root.closeAllPopups();
         }
     }
 
@@ -291,19 +238,102 @@ Item {
             border.color: Colours.palette.m3outlineVariant
             border.width: 1
 
+            FileMentionPopup {
+                id: mentionPopup
+
+                z: 100
+                width: Math.min(360, root.width)
+                visible: Boolean(mentionPopup.matches && mentionPopup.matches.length > 0 && root.mentionQueryActive)
+                anchors {
+                    bottom: parent.top
+                    bottomMargin: Tokens.spacing.small
+                    left: parent.left
+                }
+
+                onFileSelected: function(path) {
+                    root.insertMention(path);
+                }
+                onDismissed: {
+                    root.mentionQueryActive = false;
+                }
+            }
+
+            ContextMenuPopup {
+                id: contextPopup
+
+                z: 100
+                anchors {
+                    bottom: parent.top
+                    bottomMargin: Tokens.spacing.small
+                    left: parent.left
+                    leftMargin: Tokens.padding.medium
+                }
+
+                onFilesRequested: function() {
+                    root.filesRequested();
+                }
+                onFolderRequested: function() {
+                    root.folderRequested();
+                }
+                onMentionsRequested: function() {
+                    inputField.text = inputField.text + "@";
+                    inputField.cursorPosition = inputField.text.length;
+                    root.checkMention();
+                    root.focusInput();
+                }
+            }
+
+            ModelSelectorPopup {
+                id: modelPopup
+
+                z: 100
+                currentPlatform: root.currentPlatform
+                anchors {
+                    bottom: parent.top
+                    bottomMargin: Tokens.spacing.small
+                    left: parent.left
+                    leftMargin: Tokens.padding.medium + 36
+                }
+
+                onPlatformSelected: function(platform) {
+                    root.currentPlatform = platform;
+                    root.platformSelected(platform);
+                    root.focusInput();
+                }
+            }
+
+            ModeSelectorPopup {
+                id: modePopup
+
+                z: 100
+                currentMode: root.currentMode
+                anchors {
+                    bottom: parent.top
+                    bottomMargin: Tokens.spacing.small
+                    right: parent.right
+                    rightMargin: Tokens.padding.medium + 40
+                }
+
+                onModeSelected: function(mode) {
+                    root.currentMode = mode;
+                    root.modeSelected(mode);
+                    root.focusInput();
+                }
+            }
+
             ColumnLayout {
                 id: inputCardCol
 
+                spacing: Tokens.spacing.small
                 anchors {
                     left: parent.left
                     right: parent.right
                     top: parent.top
                     margins: Tokens.padding.medium
                 }
-                spacing: Tokens.spacing.small
 
-                // Attachment chips
-                RowLayout {
+                // Attachment chips (wrapping flow)
+                Flow {
                     id: attachmentBar
 
                     visible: root.attachments.length > 0
@@ -311,6 +341,8 @@ Item {
                     Layout.fillWidth: true
 
                     Repeater {
+                        id: chipRepeater
+
                         model: root.attachments
 
                         delegate: StyledRect {
@@ -326,8 +358,9 @@ Item {
 
                             RowLayout {
                                 id: chipRow
-                                anchors.centerIn: parent
+
                                 spacing: Tokens.spacing.extraSmall
+                                anchors.centerIn: parent
 
                                 MaterialIcon {
                                     text: "attachment"
@@ -343,7 +376,7 @@ Item {
                                     color: Colours.palette.m3onSecondaryContainer
                                     font: Tokens.font.label.small
                                     elide: Text.ElideMiddle
-                                    Layout.maximumWidth: 120
+                                    Layout.maximumWidth: 140
                                 }
 
                                 MaterialIcon {
@@ -363,75 +396,97 @@ Item {
                     }
                 }
 
-                // Text Input area
+                // Text Input area (multiline auto-expanding)
                 Item {
+                    implicitHeight: Math.min(120, Math.max(28, inputField.implicitHeight))
                     Layout.fillWidth: true
-                    implicitHeight: Math.max(28, inputField.implicitHeight)
 
-                    TextInput {
-                        id: inputField
+                    Flickable {
+                        id: inputFlickable
 
+                        clip: true
+                        boundsBehavior: Flickable.StopAtBounds
+                        contentWidth: width
+                        contentHeight: inputField.implicitHeight
                         anchors {
-                            left: parent.left
-                            right: parent.right
-                            verticalCenter: parent.verticalCenter
+                            fill: parent
                             leftMargin: Tokens.padding.small
                             rightMargin: Tokens.padding.small
                         }
-                        color: Colours.palette.m3onSurface
-                        font: Tokens.font.body.medium
-                        clip: true
 
-                        onTextChanged: {
-                            root.checkMention();
-                        }
+                        TextEdit {
+                            id: inputField
 
-                        Keys.onPressed: function(event) {
-                            if (mentionPopup.visible) {
-                                if (event.key === Qt.Key_Down) {
-                                    mentionPopup.selectNext();
-                                    event.accepted = true;
-                                    return;
-                                }
-                                if (event.key === Qt.Key_Up) {
-                                    mentionPopup.selectPrevious();
-                                    event.accepted = true;
-                                    return;
-                                }
-                                if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !(event.modifiers & Qt.ShiftModifier)) {
-                                    if (mentionPopup.matches && mentionPopup.matches.length > 0) {
-                                        mentionPopup.triggerSelection();
+                            width: inputFlickable.width
+                            wrapMode: TextEdit.Wrap
+                            color: Colours.palette.m3onSurface
+                            font: Tokens.font.body.medium
+                            selectByMouse: true
+
+                            onTextChanged: {
+                                root.checkMention();
+                            }
+
+                            onCursorRectangleChanged: {
+                                inputFlickable.contentY = Math.max(0, inputField.cursorRectangle.y + inputField.cursorRectangle.height - inputFlickable.height);
+                            }
+
+                            Keys.onPressed: function(event) {
+                                if (event.key === Qt.Key_Escape) {
+                                    if (contextPopup.isOpen || modelPopup.isOpen || modePopup.isOpen) {
+                                        root.closeAllPopups();
+                                        event.accepted = true;
+                                        return;
+                                    }
+                                    if (mentionPopup.visible) {
+                                        root.mentionQueryActive = false;
                                         event.accepted = true;
                                         return;
                                     }
                                 }
-                                if (event.key === Qt.Key_Escape) {
-                                    root.mentionQueryActive = false;
+
+                                if (mentionPopup.visible) {
+                                    if (event.key === Qt.Key_Down) {
+                                        mentionPopup.selectNext();
+                                        event.accepted = true;
+                                        return;
+                                    }
+                                    if (event.key === Qt.Key_Up) {
+                                        mentionPopup.selectPrevious();
+                                        event.accepted = true;
+                                        return;
+                                    }
+                                    if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !(event.modifiers & Qt.ShiftModifier)) {
+                                        if (mentionPopup.matches && mentionPopup.matches.length > 0) {
+                                            mentionPopup.triggerSelection();
+                                            event.accepted = true;
+                                            return;
+                                        }
+                                    }
+                                }
+
+                                if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !(event.modifiers & Qt.ShiftModifier)) {
+                                    root.submitPrompt();
                                     event.accepted = true;
                                     return;
                                 }
                             }
 
-                            if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !(event.modifiers & Qt.ShiftModifier)) {
-                                root.submitPrompt();
-                                event.accepted = true;
+                            StyledText {
+                                anchors.fill: parent
+                                text: root.isConnected ? "Ask anything, @ to mention, / for actions" : "Connecting to daemon..."
+                                color: Colours.palette.m3onSurfaceVariant
+                                font: parent.font
+                                visible: !inputField.text
                             }
-                        }
-
-                        StyledText {
-                            anchors.fill: parent
-                            text: root.isConnected ? "Ask anything, @ to mention, / for actions" : "Connecting to daemon..."
-                            color: Colours.palette.m3onSurfaceVariant
-                            font: parent.font
-                            visible: !inputField.text
                         }
                     }
                 }
 
                 // Bottom Controls Row
                 RowLayout {
-                    Layout.fillWidth: true
                     spacing: Tokens.spacing.small
+                    Layout.fillWidth: true
 
                     // "+" Add Context button
                     StyledRect {
@@ -441,6 +496,8 @@ Item {
                         implicitHeight: 28
                         radius: Tokens.rounding.full
                         color: contextPopup.isOpen ? Colours.palette.m3surfaceContainerHighest : "transparent"
+                        Accessible.role: Accessible.Button
+                        Accessible.name: "Add Context"
 
                         MaterialIcon {
                             anchors.centerIn: parent
@@ -469,11 +526,14 @@ Item {
                         implicitWidth: modelRow.implicitWidth + Tokens.padding.small * 2
                         radius: Tokens.rounding.full
                         color: modelPopup.isOpen ? Colours.palette.m3surfaceContainerHighest : "transparent"
+                        Accessible.role: Accessible.Button
+                        Accessible.name: "Select Model"
 
                         RowLayout {
                             id: modelRow
-                            anchors.centerIn: parent
+
                             spacing: Tokens.spacing.extraSmall
+                            anchors.centerIn: parent
 
                             MaterialIcon {
                                 text: root.currentPlatform === "claude" ? "terminal"
@@ -520,11 +580,14 @@ Item {
                         implicitWidth: modeRow.implicitWidth + Tokens.padding.small * 2
                         radius: Tokens.rounding.full
                         color: modePopup.isOpen ? Colours.palette.m3surfaceContainerHighest : "transparent"
+                        Accessible.role: Accessible.Button
+                        Accessible.name: "Select Execution Mode"
 
                         RowLayout {
                             id: modeRow
-                            anchors.centerIn: parent
+
                             spacing: Tokens.spacing.extraSmall
+                            anchors.centerIn: parent
 
                             MaterialIcon {
                                 text: root.currentMode === "yolo" ? "bolt"
@@ -573,6 +636,8 @@ Item {
                         implicitHeight: 32
                         radius: Tokens.rounding.full
                         color: canSend ? Colours.palette.m3primary : Colours.palette.m3surfaceContainerHighest
+                        Accessible.role: Accessible.Button
+                        Accessible.name: "Send Message"
 
                         MaterialIcon {
                             anchors.centerIn: parent
