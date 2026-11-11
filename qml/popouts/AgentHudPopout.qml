@@ -6,6 +6,7 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import Caelestia.Config
 import qs.components
+import qs.services
 import "components"
 
 // qmllint disable uncreatable-type

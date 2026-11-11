@@ -20,7 +20,6 @@ ShellRoot {
 
         anchors {
             top: true
-            horizontalCenter: true
         }
 
         AgentHudButton {
