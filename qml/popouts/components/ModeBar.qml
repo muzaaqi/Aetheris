@@ -12,6 +12,7 @@ StyledRect {
     signal modeSelected(string mode)
     signal thinkingSelected(string budget)
 
+    implicitWidth: 320
     implicitHeight: 38
     radius: Tokens.rounding.full
     color: Colours.palette.m3surfaceContainer

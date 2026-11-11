@@ -163,12 +163,12 @@ Item {
 
                     width: messageListView.width
                     implicitHeight: isTool ? toolCard.implicitHeight + Tokens.spacing.extraSmall
-                                           : bubbleRect.implicitHeight + Tokens.spacing.extraSmall
+                                           : (bubbleRect.visible ? bubbleRect.implicitHeight + Tokens.spacing.extraSmall : 0)
 
                     StyledRect {
                         id: bubbleRect
 
-                        visible: !delegateRoot.isTool
+                        visible: !delegateRoot.isTool && (delegateRoot.text.length > 0 || delegateRoot.isUser)
                         width: Math.min(messageText.implicitWidth + Tokens.padding.medium * 2, delegateRoot.width * 0.85)
                         implicitHeight: messageText.implicitHeight + Tokens.padding.medium * 2
                         radius: Tokens.rounding.large
