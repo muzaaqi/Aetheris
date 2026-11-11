@@ -4,8 +4,11 @@
 pub mod adapters;
 pub mod config;
 pub mod context;
+pub mod diff;
 pub mod error;
 pub mod hyprland;
+pub mod interception;
+pub mod mcp;
 pub mod protocol;
 pub mod server;
 pub mod transcript;
@@ -19,7 +22,6 @@ use tracing_subscriber::EnvFilter;
 use crate::config::DaemonConfig;
 use crate::error::Result;
 use crate::hyprland::run_hyprland_listener;
-use crate::server::run_server;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -35,19 +37,27 @@ async fn main() -> Result<()> {
     let shutdown = CancellationToken::new();
     let (addr_tx, addr_rx) = oneshot::channel();
     let active_workspace = std::sync::Arc::new(tokio::sync::RwLock::new(None));
+    let execution_mode = std::sync::Arc::new(tokio::sync::RwLock::new(
+        crate::protocol::ExecutionMode::Safe,
+    ));
+    let approval_registry = std::sync::Arc::new(crate::interception::ApprovalRegistry::new());
 
     // Spawn server task
     let server_config = config.clone();
     let server_event_tx = event_tx.clone();
     let server_shutdown = shutdown.clone();
     let server_active_ws = active_workspace.clone();
+    let server_mode = execution_mode.clone();
+    let server_reg = approval_registry.clone();
     let mut server_task = tokio::spawn(async move {
-        run_server(
+        crate::server::run_server_with_state(
             &server_config,
             server_event_tx,
             server_shutdown,
             addr_tx,
             server_active_ws,
+            server_mode,
+            server_reg,
         )
         .await
     });

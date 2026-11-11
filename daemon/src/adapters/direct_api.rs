@@ -1,23 +1,24 @@
-//! Direct API / 9router streaming SSE adapter implementation.
+//! Direct API / 9router streaming adapter.
 //!
-//! Connects directly to OpenAI, Anthropic, or local 9router SSE endpoints.
+//! Provides direct SSE streaming connectivity to OpenAI, Anthropic, and Gemini APIs.
 
 use futures_util::future::{self, BoxFuture};
 
 use super::AgentAdapter;
 use crate::error::DaemonError;
+use crate::protocol::ExecutionMode;
 
-/// Adapter for Direct API endpoints (9router / OpenRouter / OpenAI compatible).
+/// Adapter for Direct LLM streaming APIs.
 #[derive(Debug, Default)]
 pub struct DirectApiAdapter {
-    mode: std::sync::RwLock<String>,
+    mode: std::sync::RwLock<ExecutionMode>,
 }
 
 impl DirectApiAdapter {
     /// Creates a new `DirectApiAdapter`.
     pub fn new() -> Self {
         Self {
-            mode: std::sync::RwLock::new("safe".to_string()),
+            mode: std::sync::RwLock::new(ExecutionMode::Safe),
         }
     }
 }
@@ -42,21 +43,10 @@ impl AgentAdapter for DirectApiAdapter {
         })
     }
 
-    fn set_mode<'a>(&'a self, mode: &'a str) -> BoxFuture<'a, Result<(), DaemonError>> {
-        let mode_lower = mode.to_lowercase();
-        match mode_lower.as_str() {
-            "safe" | "yolo" | "plan" => {
-                if let Ok(mut lock) = self.mode.write() {
-                    *lock = mode_lower;
-                }
-                Box::pin(future::ready(Ok(())))
-            }
-            invalid => {
-                let err = DaemonError::Config(format!(
-                    "Unsupported mode '{invalid}' for Direct API. Supported: safe, yolo, plan"
-                ));
-                Box::pin(future::ready(Err(err)))
-            }
+    fn set_mode<'a>(&'a self, mode: ExecutionMode) -> BoxFuture<'a, Result<(), DaemonError>> {
+        if let Ok(mut lock) = self.mode.write() {
+            *lock = mode;
         }
+        Box::pin(future::ready(Ok(())))
     }
 }

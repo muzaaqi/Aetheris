@@ -3,7 +3,135 @@
 //! Provides bidirectional contracts between the Caelestia QML HUD (client)
 //! and the Aetheris Rust background daemon (server).
 
+use std::fmt;
+use std::str::FromStr;
+
 use serde::{Deserialize, Serialize};
+
+// ============================================================================
+// Execution Mode & Configuration Enums
+// ============================================================================
+
+/// Execution mode controlling tool execution guardrails.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ExecutionMode {
+    /// Safe mode: mutating tool calls require explicit user approval.
+    #[default]
+    Safe,
+    /// YOLO mode: automated execution without user confirmation.
+    Yolo,
+    /// Plan-only mode: read-only planning; mutating tools are rejected.
+    PlanOnly,
+}
+
+impl fmt::Display for ExecutionMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Safe => write!(f, "safe"),
+            Self::Yolo => write!(f, "yolo"),
+            Self::PlanOnly => write!(f, "plan_only"),
+        }
+    }
+}
+
+impl FromStr for ExecutionMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_str() {
+            "safe" => Ok(Self::Safe),
+            "yolo" | "auto" => Ok(Self::Yolo),
+            "plan" | "plan-only" | "plan_only" => Ok(Self::PlanOnly),
+            other => Err(format!("unknown execution mode: '{other}'")),
+        }
+    }
+}
+
+impl Serialize for ExecutionMode {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(match self {
+            Self::Safe => "safe",
+            Self::Yolo => "yolo",
+            Self::PlanOnly => "plan_only",
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for ExecutionMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Self::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+/// Thinking effort budget level for models supporting extended reasoning.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ThinkingBudget {
+    /// Extended thinking disabled.
+    #[default]
+    Off,
+    /// Low thinking budget (~1k-2k tokens).
+    Low,
+    /// Medium thinking budget (~4k-8k tokens).
+    Medium,
+    /// High thinking budget (~16k-32k tokens).
+    High,
+}
+
+impl fmt::Display for ThinkingBudget {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Off => write!(f, "off"),
+            Self::Low => write!(f, "low"),
+            Self::Medium => write!(f, "medium"),
+            Self::High => write!(f, "high"),
+        }
+    }
+}
+
+impl FromStr for ThinkingBudget {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_str() {
+            "off" | "none" => Ok(Self::Off),
+            "low" => Ok(Self::Low),
+            "medium" | "med" => Ok(Self::Medium),
+            "high" | "max" => Ok(Self::High),
+            other => Err(format!("unknown thinking budget: '{other}'")),
+        }
+    }
+}
+
+impl Serialize for ThinkingBudget {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(match self {
+            Self::Off => "off",
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for ThinkingBudget {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Self::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
 
 // ============================================================================
 // Client -> Daemon Messages
@@ -120,6 +248,10 @@ pub enum ServerMessage {
     /// List of indexed global and workspace skills.
     #[serde(rename = "skills_list")]
     SkillsList(SkillsListPayload),
+
+    /// Result of an executed tool call.
+    #[serde(rename = "tool_call_result")]
+    ToolCallResult(ToolCallResultPayload),
 }
 
 /// Payload for `file_results` responses.
@@ -200,6 +332,23 @@ pub struct ToolCallRequestPayload {
 
     /// Whether this tool requires user approval before execution.
     pub requires_approval: bool,
+
+    /// Optional unified diff representation of proposed modifications.
+    #[serde(default)]
+    pub diff: Option<String>,
+}
+
+/// Payload for `tool_call_result` notifications.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolCallResultPayload {
+    /// Unique identifier of the executed tool call.
+    pub tool_call_id: String,
+
+    /// Whether tool execution succeeded.
+    pub success: bool,
+
+    /// Text output or error message from execution.
+    pub output: String,
 }
 
 /// Payload for `workspace_sync` notifications.

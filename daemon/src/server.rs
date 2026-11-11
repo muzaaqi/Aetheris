@@ -5,6 +5,7 @@
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
@@ -17,18 +18,40 @@ use tokio_util::sync::CancellationToken;
 
 use crate::config::DaemonConfig;
 use crate::error::Result;
-use crate::protocol::{ClientMessage, ServerMessage, TokenStreamPayload};
+use crate::interception::ApprovalRegistry;
+use crate::protocol::{ClientMessage, ExecutionMode, ServerMessage, TokenStreamPayload};
 
-/// Runs the local WebSocket server until shutdown is requested.
-///
-/// Binds to the configured address, announces the bound socket address via
-/// `addr_tx`, and accepts client connections in an event-driven async loop.
+/// Runs the local WebSocket server until shutdown is requested using default safety state.
 pub async fn run_server(
     config: &DaemonConfig,
     event_tx: broadcast::Sender<ServerMessage>,
     shutdown: CancellationToken,
     addr_tx: oneshot::Sender<SocketAddr>,
     active_workspace: Arc<RwLock<Option<PathBuf>>>,
+) -> Result<()> {
+    let mode = Arc::new(RwLock::new(ExecutionMode::Safe));
+    let registry = Arc::new(ApprovalRegistry::new());
+    run_server_with_state(
+        config,
+        event_tx,
+        shutdown,
+        addr_tx,
+        active_workspace,
+        mode,
+        registry,
+    )
+    .await
+}
+
+/// Runs the local WebSocket server with explicitly shared execution mode and approval registry.
+pub async fn run_server_with_state(
+    config: &DaemonConfig,
+    event_tx: broadcast::Sender<ServerMessage>,
+    shutdown: CancellationToken,
+    addr_tx: oneshot::Sender<SocketAddr>,
+    active_workspace: Arc<RwLock<Option<PathBuf>>>,
+    execution_mode: Arc<RwLock<ExecutionMode>>,
+    approval_registry: Arc<ApprovalRegistry>,
 ) -> Result<()> {
     let listener = TcpListener::bind(config.addr()).await?;
     let local_addr = listener.local_addr()?;
@@ -53,6 +76,8 @@ pub async fn run_server(
                         let client_event_tx = event_tx.clone();
                         let client_ws_config = ws_config;
                         let client_active_ws = active_workspace.clone();
+                        let client_mode = execution_mode.clone();
+                        let client_registry = approval_registry.clone();
 
                         tokio::spawn(async move {
                             if let Err(e) = handle_client(
@@ -62,6 +87,8 @@ pub async fn run_server(
                                 client_shutdown,
                                 client_ws_config,
                                 client_active_ws,
+                                client_mode,
+                                client_registry,
                             ).await {
                                 tracing::debug!("Client {peer_addr} disconnected or error: {e}");
                             }
@@ -79,6 +106,7 @@ pub async fn run_server(
 }
 
 /// Handles an individual WebSocket client session.
+#[allow(clippy::too_many_arguments)]
 async fn handle_client(
     stream: tokio::net::TcpStream,
     peer_addr: SocketAddr,
@@ -86,6 +114,8 @@ async fn handle_client(
     shutdown: CancellationToken,
     ws_config: WebSocketConfig,
     active_workspace: Arc<RwLock<Option<PathBuf>>>,
+    execution_mode: Arc<RwLock<ExecutionMode>>,
+    approval_registry: Arc<ApprovalRegistry>,
 ) -> Result<()> {
     let ws_stream = accept_async_with_config(stream, Some(ws_config)).await?;
     tracing::debug!("WebSocket handshake completed for {peer_addr}");
@@ -129,7 +159,7 @@ async fn handle_client(
                         match serde_json::from_str::<ClientMessage>(&text) {
                             Ok(ClientMessage::SendMessage(payload)) => {
                                 tracing::info!("Received SendMessage from {peer_addr}: {}", payload.text);
-                                // Phase 1 Echo MVP: stream single completed token chunk back
+                                // Echo token stream response
                                 let echo = ServerMessage::TokenStream(TokenStreamPayload {
                                     token: payload.text,
                                     done: true,
@@ -148,9 +178,20 @@ async fn handle_client(
                             }
                             Ok(ClientMessage::ToolApproval(payload)) => {
                                 tracing::debug!("Received ToolApproval from {peer_addr}: id={}, approved={}", payload.tool_call_id, payload.approved);
+                                let resolved = approval_registry.resolve(&payload.tool_call_id, payload.approved);
+                                tracing::debug!("Tool approval for {} resolved: {}", payload.tool_call_id, resolved);
                             }
                             Ok(ClientMessage::UpdateConfig(payload)) => {
                                 tracing::debug!("Received UpdateConfig from {peer_addr}: platform={}, mode={}, thinking={}", payload.platform, payload.mode, payload.thinking);
+                                match ExecutionMode::from_str(&payload.mode) {
+                                    Ok(new_mode) => {
+                                        *execution_mode.write().await = new_mode;
+                                        tracing::info!("Updated daemon execution mode to: {new_mode:?}");
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!("Failed to parse execution mode from {peer_addr}: {e}");
+                                    }
+                                }
                             }
                             Ok(ClientMessage::SearchFiles(payload)) => {
                                 tracing::debug!("Received SearchFiles from {peer_addr}: query={}", payload.query);

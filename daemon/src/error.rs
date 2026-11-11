@@ -25,6 +25,14 @@ pub enum AetherisError {
     #[error("Configuration error: {0}")]
     Config(String),
 
+    /// Tool execution blocked or rejected by safety policy.
+    #[error("Interception error: {0}")]
+    Interception(String),
+
+    /// Tool approval request timed out.
+    #[error("Approval timeout: {0}")]
+    ApprovalTimeout(String),
+
     /// Internal daemon worker or concurrency errors.
     #[error("Internal error: {0}")]
     Internal(String),
