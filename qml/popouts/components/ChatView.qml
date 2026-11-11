@@ -15,6 +15,7 @@ Item {
 
     signal sendRequested(string text, var attachments)
     signal fileSearchRequested(string query)
+    signal toolApprovalRequested(string toolCallId, bool approved)
 
     function submitPrompt() {
         if (!root.isConnected)
@@ -150,14 +151,24 @@ Item {
 
                     required property string sender
                     required property string text
+                    property string toolCallId: typeof model !== "undefined" && typeof model.toolCallId !== "undefined" ? model.toolCallId : ""
+                    property string toolName: typeof model !== "undefined" && typeof model.toolName !== "undefined" ? model.toolName : ""
+                    property string toolArgs: typeof model !== "undefined" && typeof model.toolArgs !== "undefined" ? model.toolArgs : ""
+                    property bool requiresApproval: typeof model !== "undefined" && typeof model.requiresApproval !== "undefined" ? model.requiresApproval : true
+                    property string status: typeof model !== "undefined" && typeof model.status !== "undefined" ? model.status : "pending"
+                    property string diff: typeof model !== "undefined" && typeof model.diff !== "undefined" ? model.diff : ""
 
+                    readonly property bool isTool: sender === "tool"
                     readonly property bool isUser: sender === "user"
 
                     width: messageListView.width
-                    implicitHeight: bubbleRect.implicitHeight + Tokens.spacing.extraSmall
+                    implicitHeight: isTool ? toolCard.implicitHeight + Tokens.spacing.extraSmall
+                                           : bubbleRect.implicitHeight + Tokens.spacing.extraSmall
+
                     StyledRect {
                         id: bubbleRect
 
+                        visible: !delegateRoot.isTool
                         width: Math.min(messageText.implicitWidth + Tokens.padding.medium * 2, delegateRoot.width * 0.85)
                         implicitHeight: messageText.implicitHeight + Tokens.padding.medium * 2
                         radius: Tokens.rounding.large
@@ -181,6 +192,23 @@ Item {
                                 fill: parent
                                 margins: Tokens.padding.medium
                             }
+                        }
+                    }
+
+                    ToolCard {
+                        id: toolCard
+
+                        visible: delegateRoot.isTool
+                        width: delegateRoot.width
+                        toolCallId: delegateRoot.toolCallId
+                        toolName: delegateRoot.toolName
+                        toolArgs: delegateRoot.toolArgs
+                        requiresApproval: delegateRoot.requiresApproval
+                        status: delegateRoot.status
+                        diffText: delegateRoot.diff
+
+                        onApprovalDecided: function(id, approved) {
+                            root.toolApprovalRequested(id, approved);
                         }
                     }
                 }

@@ -58,6 +58,12 @@ PanelWindow {
         ListElement {
             sender: "assistant"
             text: "Hello! I am Aetheris, your OS-level AI agent. How can I assist you in this workspace?"
+            toolCallId: ""
+            toolName: ""
+            toolArgs: ""
+            requiresApproval: false
+            status: "completed"
+            diff: ""
         }
     }
 
@@ -86,7 +92,35 @@ PanelWindow {
                             const last = chatModel.get(chatModel.count - 1);
                             chatModel.setProperty(chatModel.count - 1, "text", last.text + payload.token);
                         } else {
-                            chatModel.append({ sender: "assistant", text: payload.token });
+                            chatModel.append({
+                                sender: "assistant",
+                                text: payload.token,
+                                toolCallId: "",
+                                toolName: "",
+                                toolArgs: "",
+                                requiresApproval: false,
+                                status: "completed",
+                                diff: ""
+                            });
+                        }
+                    }
+                } else if (data.type === "tool_call_request") {
+                    chatModel.append({
+                        sender: "tool",
+                        text: "",
+                        toolCallId: data.payload.tool_call_id || "",
+                        toolName: data.payload.tool_name || "",
+                        toolArgs: JSON.stringify(data.payload.args || {}),
+                        requiresApproval: data.payload.requires_approval === true,
+                        status: data.payload.requires_approval ? "pending" : "approved",
+                        diff: data.payload.diff || ""
+                    });
+                } else if (data.type === "tool_call_result") {
+                    for (let i = 0; i < chatModel.count; i++) {
+                        const item = chatModel.get(i);
+                        if (item.toolCallId === data.payload.tool_call_id) {
+                            chatModel.setProperty(i, "status", data.payload.success ? "completed" : "rejected");
+                            break;
                         }
                     }
                 } else if (data.type === "workspace_sync") {
@@ -120,8 +154,26 @@ PanelWindow {
             return;
 
         root.isThinking = true;
-        chatModel.append({ sender: "user", text: text });
-        chatModel.append({ sender: "assistant", text: "" });
+        chatModel.append({
+            sender: "user",
+            text: text,
+            toolCallId: "",
+            toolName: "",
+            toolArgs: "",
+            requiresApproval: false,
+            status: "completed",
+            diff: ""
+        });
+        chatModel.append({
+            sender: "assistant",
+            text: "",
+            toolCallId: "",
+            toolName: "",
+            toolArgs: "",
+            requiresApproval: false,
+            status: "completed",
+            diff: ""
+        });
 
         const req = {
             type: "send_message",
@@ -132,6 +184,19 @@ PanelWindow {
             }
         };
         ws.sendTextMessage(JSON.stringify(req));
+    }
+
+    function dispatchConfigUpdate(mode, thinking) {
+        if (ws.status === WebSocket.Open) {
+            ws.sendTextMessage(JSON.stringify({
+                type: "update_config",
+                payload: {
+                    platform: "antigravity",
+                    mode: mode,
+                    thinking: thinking
+                }
+            }));
+        }
     }
 
     StyledRect {
@@ -316,6 +381,24 @@ PanelWindow {
                 }
             }
 
+            // Mode & Thinking Selector
+            ModeBar {
+                id: modeBar
+
+                Layout.fillWidth: true
+                Layout.leftMargin: Tokens.padding.medium
+                Layout.rightMargin: Tokens.padding.medium
+                Layout.topMargin: Tokens.spacing.extraSmall
+                Layout.bottomMargin: Tokens.spacing.extraSmall
+
+                onModeSelected: function(mode) {
+                    root.dispatchConfigUpdate(mode, modeBar.thinkingBudget);
+                }
+                onThinkingSelected: function(budget) {
+                    root.dispatchConfigUpdate(modeBar.currentMode, budget);
+                }
+            }
+
             // Chat View
             ChatView {
                 id: chatView
@@ -328,6 +411,18 @@ PanelWindow {
 
                 onSendRequested: function(text, attachments) {
                     root.dispatchPrompt(text, attachments);
+                }
+
+                onToolApprovalRequested: function(toolCallId, approved) {
+                    if (ws.status === WebSocket.Open) {
+                        ws.sendTextMessage(JSON.stringify({
+                            type: "tool_approval",
+                            payload: {
+                                tool_call_id: toolCallId,
+                                approved: approved
+                            }
+                        }));
+                    }
                 }
 
                 onFileSearchRequested: function(query) {
